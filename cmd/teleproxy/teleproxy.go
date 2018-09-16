@@ -8,9 +8,9 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/user"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -18,6 +18,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
 	"github.com/datawire/teleproxy/internal/pkg/nat"
 	"github.com/datawire/teleproxy/internal/pkg/tpu"
 	"github.com/miekg/dns"
@@ -26,8 +27,8 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
@@ -41,13 +42,13 @@ func kubeWatch() {
 	if err != nil {
 		panic(err.Error())
 	}
-	
+
 	watchlist := cache.NewListWatchFromClient(clientset.Core().RESTClient(), "services", v1.NamespaceAll,
 		fields.Everything())
 	_, controller := cache.NewInformer(
 		watchlist,
 		&v1.Service{},
-		time.Second * 0,
+		time.Second*0,
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				svc := obj.(*v1.Service)
@@ -61,7 +62,7 @@ func kubeWatch() {
 				removeRoute(key)
 				domainsToAddresses.Delete(key)
 			},
-			UpdateFunc:func(oldObj, newObj interface{}) {
+			UpdateFunc: func(oldObj, newObj interface{}) {
 				svc := newObj.(*v1.Service)
 				log.Printf("CHANGED: %s->%s\n", svc.Name, svc.Spec.ClusterIP)
 				updateRoute(svc)
@@ -72,8 +73,8 @@ func kubeWatch() {
 	go controller.Run(stop)
 }
 
-
 var domainsToAddresses sync.Map
+
 // XXX: need to do better than teleproxy
 var translator = nat.NewTranslator("teleproxy")
 
@@ -84,13 +85,16 @@ func removeRoute(key string) {
 }
 
 func updateRoute(svc *v1.Service) {
-	if svc.Spec.ClusterIP == "None" { return }
-	domainsToAddresses.Store(strings.ToLower(svc.Name + "."), svc.Spec.ClusterIP)
+	if svc.Spec.ClusterIP == "None" {
+		return
+	}
+	domainsToAddresses.Store(strings.ToLower(svc.Name+"."), svc.Spec.ClusterIP)
 	translator.ForwardTCP(svc.Spec.ClusterIP, "1234")
 	kickDNS()
 }
 
 type handler struct{}
+
 func (this *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 	log.Println(r.Question[0].Qtype, "DNS request for", r.Question[0].Name)
 	domain := strings.ToLower(r.Question[0].Name)
@@ -112,8 +116,8 @@ func (this *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			// requested, then mac dns seems to return an
 			// nxdomain
 			msg.Answer = append(msg.Answer, &dns.A{
-				Hdr: dns.RR_Header{ Name: r.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60 },
-				A: net.ParseIP(address.(string)),
+				Hdr: dns.RR_Header{Name: r.Question[0].Name, Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60},
+				A:   net.ParseIP(address.(string)),
 			})
 			w.WriteMsg(&msg)
 			return
@@ -131,7 +135,7 @@ func (this *handler) ServeDNS(w dns.ResponseWriter, r *dns.Msg) {
 			return
 		}
 	}
-	in, err := dns.Exchange(r, *fallbackIP + ":53")
+	in, err := dns.Exchange(r, *fallbackIP+":53")
 	if err != nil {
 		log.Println(err)
 		return
@@ -209,14 +213,18 @@ func main() {
 
 	if *kubeconfig == "" {
 		current, err := user.Current()
-		if err != nil { panic(err) }
+		if err != nil {
+			panic(err)
+		}
 		home := current.HomeDir
 		*kubeconfig = filepath.Join(home, ".kube/config")
 	}
 
 	if *dnsIP == "" {
 		dat, err := ioutil.ReadFile("/etc/resolv.conf")
-		if err != nil { panic(err) }
+		if err != nil {
+			panic(err)
+		}
 		for _, line := range strings.Split(string(dat), "\n") {
 			if strings.Contains(line, "nameserver") {
 				fields := strings.Fields(line)
@@ -288,10 +296,10 @@ spec:
 	apply.Wait()
 
 	pf := tpu.Keepalive(0, "", "kubectl", "--kubeconfig", *kubeconfig, "port-forward", "pod/teleproxy", "8022")
-        defer pf.Shutdown()
+	defer pf.Shutdown()
 	// XXX: probably need some kind of keepalive check for ssh, first
 	// curl after wakeup seems to trigger detection of death
-//	ssh := tpu.Keepalive(0, "", "ssh", "-D", "localhost:1080", "-L", "localhost:9050:localhost:9050", "-C", "-N", "-oConnectTimeout=5", "-oExitOnForwardFailure=yes",
+	//	ssh := tpu.Keepalive(0, "", "ssh", "-D", "localhost:1080", "-L", "localhost:9050:localhost:9050", "-C", "-N", "-oConnectTimeout=5", "-oExitOnForwardFailure=yes",
 	ssh := tpu.Keepalive(0, "", "ssh", "-D", "localhost:1080", "-C", "-N", "-oConnectTimeout=5", "-oExitOnForwardFailure=yes",
 		"-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null", "telepresence@localhost", "-p", "8022")
 	defer ssh.Shutdown()
@@ -301,7 +309,7 @@ spec:
 	go func() {
 		sem := tpu.NewSemaphore(limit)
 		for {
-			conn, err := ln.Accept();
+			conn, err := ln.Accept()
 			if err != nil {
 				log.Println(err)
 			} else {
@@ -340,7 +348,7 @@ func handleConnection(conn *net.TCPConn, sem tpu.Semaphore) {
 	// setting up an ssh tunnel with dynamic socks proxy at this end
 	// seems faster than connecting directly to a socks proxy
 	dialer, err := proxy.SOCKS5("tcp", "localhost:1080", nil, proxy.Direct)
-//	dialer, err := proxy.SOCKS5("tcp", "localhost:9050", nil, proxy.Direct)
+	//	dialer, err := proxy.SOCKS5("tcp", "localhost:9050", nil, proxy.Direct)
 	if err != nil {
 		log.Println(err)
 		conn.Close()
@@ -374,7 +382,7 @@ func pipe(from, to *net.TCPConn, done tpu.Latch) {
 	}()
 	defer done.Notify()
 
-	const size = 64*1024
+	const size = 64 * 1024
 	var buf [size]byte
 	for {
 		n, err := from.Read(buf[0:size])
@@ -397,7 +405,9 @@ func pipe(from, to *net.TCPConn, done tpu.Latch) {
 func getPIDs() (pids []int, err error) {
 	cmd := exec.Command("ps", "-axo", "pid=,command=")
 	out, err := cmd.CombinedOutput()
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	if !cmd.ProcessState.Success() {
 		err = fmt.Errorf("%s", out)
 		return
@@ -408,7 +418,9 @@ func getPIDs() (pids []int, err error) {
 			parts := strings.Fields(line)
 			var pid int
 			pid, err = strconv.Atoi(parts[0])
-			if err != nil { return }
+			if err != nil {
+				return
+			}
 			pids = append(pids, pid)
 		}
 	}
@@ -426,9 +438,13 @@ func kickDNS() {
 	log.Printf("Kicking DNS: %v\n", pids)
 	for _, pid := range pids {
 		proc, err := os.FindProcess(pid)
-		if err != nil { log.Println(err) }
+		if err != nil {
+			log.Println(err)
+		}
 		err = proc.Signal(syscall.SIGHUP)
-		if err != nil { log.Println(err) }
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -447,7 +463,9 @@ func shell(command string) (result string, err error) {
 
 func getIfaces() (ifaces []string, err error) {
 	lines, err := shell("networksetup -listallnetworkservices | fgrep -v '*'")
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	for _, line := range strings.Split(lines, "\n") {
 		line = strings.TrimSpace(line)
 		if len(line) > 0 {
