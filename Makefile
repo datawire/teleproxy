@@ -32,3 +32,6 @@ test: test-go test-docker
 
 run: build
 	./teleproxy
+
+gofmt:
+	@ goreturns -w $(shell find . -type f -name '*.go' -not -path "./vendor/*")
