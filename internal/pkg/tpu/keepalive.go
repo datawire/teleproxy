@@ -1,124 +1,55 @@
 package tpu
 
 import (
-	"io"
+	"bytes"
+	"context"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 	"syscall"
 	"time"
 )
 
-type keeper struct {
-	shutdown chan empty
-	done     chan empty
+type Keeper struct {
+	cancel func()
+	done   chan error
 }
 
-func (k keeper) Shutdown() {
-	k.shutdown <- nil
+func (k *Keeper) Shutdown() {
+	k.cancel()
 	k.Wait()
 }
 
-func (k keeper) Wait() {
+func (k *Keeper) Wait() {
 	<-k.done
 }
 
-func Keepalive(limit int, input string, program string, args ...string) (k keeper) {
-	k = keeper{
-		shutdown: make(chan empty),
-		done:     make(chan empty),
+// Keepalive ...
+func Keepalive(limit int, input string, program string, args ...string) *Keeper {
+	ctx, cancel := context.WithCancel(context.Background())
+	k := &Keeper{
+		done:   make(chan error),
+		cancel: cancel,
 	}
 	go func() {
-		count := 0
-	OUTER:
-		for {
-			cmd := exec.Command(program, args...)
-			cmd.SysProcAttr = &syscall.SysProcAttr{
-				Setpgid: true,
+		defer close(k.done)
+		retry := 0
+		for limit == 0 || retry <= limit {
+			cmd := exec.CommandContext(ctx, program, args...)
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			cmd.Stdin = bytes.NewBufferString(input)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stdout
+			log.Printf("%s", strings.Join(cmd.Args, " "))
+			err := cmd.Run()
+			if ctx.Err() != nil || err == nil {
+				return
 			}
-			l := forwardOutput(cmd)
-
-			err := writeInput(cmd, input)
-			if err != nil {
-				panic(err)
-			}
-
-			err = cmd.Start()
-			if err != nil {
-				panic(err)
-			}
-
-			died := make(chan empty)
-			go func() {
-				err = cmd.Wait()
-				if err != nil {
-					log.Println(program, err)
-				}
-				died <- nil
-			}()
-
-			count += 1
-
-			select {
-			case <-died:
-				l.Wait()
-				if count < limit || limit == 0 {
-					log.Println(program, "restarting...")
-					time.Sleep(time.Second)
-				} else {
-					break OUTER
-				}
-			case <-k.shutdown:
-				cmd.Process.Kill()
-				l.Wait()
-				break OUTER
-			}
-
+			retry++
+			log.Printf("restarting...")
+			time.Sleep(time.Second)
 		}
-		k.done <- nil
 	}()
-	return
-}
-
-func forwardOutput(cmd *exec.Cmd) Latch {
-	log.Println(strings.Join(cmd.Args, " "))
-	pipe, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
-	}
-	l := NewLatch(2)
-	go reader(pipe, l)
-	pipe, err = cmd.StderrPipe()
-	if err != nil {
-		panic(err)
-	}
-	go reader(pipe, l)
-	return l
-}
-
-func writeInput(cmd *exec.Cmd, input string) error {
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	_, err = stdin.Write([]byte(input))
-	if err != nil {
-		return err
-	}
-	err = stdin.Close()
-	return err
-}
-
-func reader(pipe io.ReadCloser, l Latch) {
-	const size = 64 * 1024
-	var buf [size]byte
-	for {
-		n, err := pipe.Read(buf[:size])
-		if err != nil {
-			pipe.Close()
-			l.Notify()
-			return
-		}
-		log.Printf("%s", buf[:n])
-	}
+	return k
 }
