@@ -1,4 +1,5 @@
 /.gocache
+/vendor/
 *.knaut
 *.knaut.claim
 /bin_*
