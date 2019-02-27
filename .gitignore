@@ -4,3 +4,6 @@
 /bin_*
 /.firewall.lock
 /.cluster.lock
+
+.idea
+*.iml
