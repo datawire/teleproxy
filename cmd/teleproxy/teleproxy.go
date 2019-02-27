@@ -79,7 +79,7 @@ func main() {
 	case DEFAULT, INTERCEPT, BRIDGE:
 		// do nothing
 	case VERSION:
-		fmt.Println("kubeapply", "version", Version)
+		fmt.Println("teleproxy", "version", Version)
 		os.Exit(0)
 	default:
 		log.Fatalf("TPY: unrecognized mode: %v", *mode)
@@ -89,7 +89,7 @@ func main() {
 
 	// do this up front so we don't miss out on cleanup if someone
 	// Control-C's just after starting us
-	signalChan := make(chan os.Signal)
+	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	if *mode == DEFAULT || *mode == INTERCEPT {
@@ -120,7 +120,7 @@ func kubeDie(err error) {
 }
 
 func checkKubectl() {
-	output, err := tpu.Shell("kubectl version --client -o json")
+	output, err := tpu.Cmd("kubectl", "version", "--client", "-o", "json")
 	if err != nil {
 		kubeDie(err)
 	}
@@ -159,6 +159,8 @@ func checkKubectl() {
 //
 // If fallbackIP is empty, it will default to Google DNS.
 func intercept(dnsIP string, fallbackIP string) (func(), error) {
+	// xxx check that we are root
+
 	if dnsIP == "" {
 		dat, err := ioutil.ReadFile("/etc/resolv.conf")
 		if err != nil {
