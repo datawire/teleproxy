@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -23,12 +24,22 @@ type listWatchAdapter struct {
 }
 
 func (lw listWatchAdapter) List(options v1.ListOptions) (runtime.Object, error) {
+	// support additional label selectors to reduce the number of objects processed
+	labelSelector := os.Getenv("KUBEWATCH_LABEL_SELECTOR")
+	if labelSelector != "" && options.LabelSelector == "" {
+		options.LabelSelector = labelSelector
+	}
 	// silently coerce the returned *unstructured.UnstructuredList
 	// struct to a runtime.Object interface.
 	return lw.resource.List(options)
 }
 
 func (lw listWatchAdapter) Watch(options v1.ListOptions) (pwatch.Interface, error) {
+	// support additional label selectors to reduce the number of objects processed
+	labelSelector := os.Getenv("KUBEWATCH_LABEL_SELECTOR")
+	if labelSelector != "" && options.LabelSelector == "" {
+		options.LabelSelector = labelSelector
+	}
 	return lw.resource.Watch(options)
 }
 
