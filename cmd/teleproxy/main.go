@@ -115,7 +115,7 @@ var LOG_LEGEND = []struct {
 	{CHECK_READY, "The worker teleproxy uses to do a self check and signal the system it is ready."},
 }
 
-type Args struct {
+type Teleproxy struct {
 	mode       string
 	kubeconfig string
 	context    string
@@ -125,10 +125,11 @@ type Args struct {
 	nosearch   bool
 	nocheck    bool
 	version    bool
+	workers    []*supervisor.Worker
 }
 
 func main() {
-	args := &Args{}
+	tele := &Teleproxy{}
 
 	var tp = &cobra.Command{
 		Use:           "teleproxy",
@@ -138,19 +139,19 @@ func main() {
 		SilenceUsage:  true,
 	}
 
-	tp.Flags().BoolVar(&args.version, "version", false, "alias for '-mode=version'")
-	tp.Flags().StringVar(&args.mode, "mode", "", "mode of operation ('intercept', 'bridge', or 'version')")
-	tp.Flags().StringVar(&args.kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
-	tp.Flags().StringVar(&args.context, "context", "", "context to use (default: the current context)")
-	tp.Flags().StringVar(&args.namespace, "namespace", "",
+	tp.Flags().BoolVar(&tele.version, "version", false, "alias for '-mode=version'")
+	tp.Flags().StringVar(&tele.mode, "mode", "", "mode of operation ('intercept', 'bridge', or 'version')")
+	tp.Flags().StringVar(&tele.kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
+	tp.Flags().StringVar(&tele.context, "context", "", "context to use (default: the current context)")
+	tp.Flags().StringVar(&tele.namespace, "namespace", "",
 		"namespace to use (default: the current namespace for the context")
-	tp.Flags().StringVar(&args.dnsIP, "dns", "", "dns ip address")
-	tp.Flags().StringVar(&args.fallbackIP, "fallback", "", "dns fallback")
-	tp.Flags().BoolVar(&args.nosearch, "no-search-override", false, "disable dns search override")
-	tp.Flags().BoolVar(&args.nocheck, "no-check", false, "disable self check")
+	tp.Flags().StringVar(&tele.dnsIP, "dns", "", "dns ip address")
+	tp.Flags().StringVar(&tele.fallbackIP, "fallback", "", "dns fallback")
+	tp.Flags().BoolVar(&tele.nosearch, "no-search-override", false, "disable dns search override")
+	tp.Flags().BoolVar(&tele.nocheck, "no-check", false, "disable self check")
 
 	tp.RunE = func(cmd *cobra.Command, _ []string) error {
-		return runTeleproxy(args)
+		return runTeleproxy(tele)
 	}
 
 	err := tp.Execute()
@@ -160,19 +161,19 @@ func main() {
 	}
 }
 
-func runTeleproxy(args *Args) error {
-	if args.version {
-		args.mode = VERSION
+func runTeleproxy(tele *Teleproxy) error {
+	if tele.version {
+		tele.mode = VERSION
 	}
 
-	switch args.mode {
+	switch tele.mode {
 	case DEFAULT, INTERCEPT, BRIDGE:
 		// do nothing
 	case VERSION:
 		fmt.Println("teleproxy", "version", Version)
 		return nil
 	default:
-		return errors.Errorf("TPY: unrecognized mode: %v", args.mode)
+		return errors.Errorf("TPY: unrecognized mode: %v", tele.mode)
 	}
 
 	// do this up front so we don't miss out on cleanup if someone
@@ -186,7 +187,7 @@ func runTeleproxy(args *Args) error {
 	sup.Supervise(&supervisor.Worker{
 		Name: TELEPROXY,
 		Work: func(p *supervisor.Process) error {
-			return teleproxy(p, args)
+			return teleproxy(p, tele)
 		},
 	})
 
@@ -254,11 +255,11 @@ func selfcheck(p *supervisor.Process) error {
 	return p.DoClean(curl.Wait, curl.Process.Kill)
 }
 
-func teleproxy(p *supervisor.Process, args *Args) error {
+func teleproxy(p *supervisor.Process, tele *Teleproxy) error {
 	sup := p.Supervisor()
 
-	if args.mode == DEFAULT || args.mode == INTERCEPT {
-		err := intercept(p, args)
+	if tele.mode == DEFAULT || tele.mode == INTERCEPT {
+		err := intercept(p, tele)
 		if err != nil {
 			return err
 		}
@@ -268,7 +269,7 @@ func teleproxy(p *supervisor.Process, args *Args) error {
 			Work: func(p *supervisor.Process) error {
 				err := selfcheck(p)
 				if err != nil {
-					if args.nocheck {
+					if tele.nocheck {
 						p.Logf("WARNING, SELF CHECK FAILED: %v", err)
 					} else {
 						return errors.Wrap(err, "SELF CHECK FAILED")
@@ -294,9 +295,9 @@ func teleproxy(p *supervisor.Process, args *Args) error {
 		})
 	}
 
-	if args.mode == DEFAULT || args.mode == BRIDGE {
+	if tele.mode == DEFAULT || tele.mode == BRIDGE {
 		requires := []string{}
-		if args.mode != BRIDGE {
+		if tele.mode != BRIDGE {
 			requires = append(requires, CHECK_READY)
 		}
 		sup.Supervise(&supervisor.Worker{
@@ -308,7 +309,7 @@ func teleproxy(p *supervisor.Process, args *Args) error {
 					return err
 				}
 
-				bridges(p, args)
+				bridges(p, tele)
 				return nil
 			},
 		})
@@ -360,14 +361,14 @@ func checkKubectl(p *supervisor.Process) error {
 // If dnsIP is empty, it will be detected from /etc/resolv.conf
 //
 // If fallbackIP is empty, it will default to Google DNS.
-func intercept(p *supervisor.Process, args *Args) error {
+func intercept(p *supervisor.Process, tele *Teleproxy) error {
 	if os.Geteuid() != 0 {
 		return errors.New("ERROR: teleproxy must be run as root or suid root")
 	}
 
 	sup := p.Supervisor()
 
-	if args.dnsIP == "" {
+	if tele.dnsIP == "" {
 		dat, err := ioutil.ReadFile("/etc/resolv.conf")
 		if err != nil {
 			return err
@@ -375,25 +376,25 @@ func intercept(p *supervisor.Process, args *Args) error {
 		for _, line := range strings.Split(string(dat), "\n") {
 			if strings.Contains(line, "nameserver") {
 				fields := strings.Fields(line)
-				args.dnsIP = fields[1]
-				log.Printf("TPY: Automatically set -dns=%v", args.dnsIP)
+				tele.dnsIP = fields[1]
+				log.Printf("TPY: Automatically set -dns=%v", tele.dnsIP)
 				break
 			}
 		}
 	}
-	if args.dnsIP == "" {
+	if tele.dnsIP == "" {
 		return errors.New("couldn't determine dns ip from /etc/resolv.conf")
 	}
 
-	if args.fallbackIP == "" {
-		if args.dnsIP == "8.8.8.8" {
-			args.fallbackIP = "8.8.4.4"
+	if tele.fallbackIP == "" {
+		if tele.dnsIP == "8.8.8.8" {
+			tele.fallbackIP = "8.8.4.4"
 		} else {
-			args.fallbackIP = "8.8.8.8"
+			tele.fallbackIP = "8.8.8.8"
 		}
-		log.Printf("TPY: Automatically set -fallback=%v", args.fallbackIP)
+		log.Printf("TPY: Automatically set -fallback=%v", tele.fallbackIP)
 	}
-	if args.fallbackIP == args.dnsIP {
+	if tele.fallbackIP == tele.dnsIP {
 		return errors.New("if your fallbackIP and your dnsIP are the same, you will have a dns loop")
 	}
 
@@ -428,7 +429,7 @@ func intercept(p *supervisor.Process, args *Args) error {
 		Work: func(p *supervisor.Process) error {
 			srv := dns.Server{
 				Listeners: dnsListeners(p, DNS_REDIR_PORT),
-				Fallback:  args.fallbackIP + ":53",
+				Fallback:  tele.fallbackIP + ":53",
 				Resolve: func(domain string) string {
 					route := iceptor.Resolve(domain)
 					if route != nil {
@@ -475,7 +476,7 @@ func intercept(p *supervisor.Process, args *Args) error {
 		Work: func(p *supervisor.Process) error {
 			bootstrap := route.Table{Name: "bootstrap"}
 			bootstrap.Add(route.Route{
-				Ip:     args.dnsIP,
+				Ip:     tele.dnsIP,
 				Target: DNS_REDIR_PORT,
 				Proto:  "udp",
 			})
@@ -488,14 +489,14 @@ func intercept(p *supervisor.Process, args *Args) error {
 			iceptor.Update(bootstrap)
 
 			var restore func()
-			if !args.nosearch {
+			if !tele.nosearch {
 				restore = dns.OverrideSearchDomains(p, ".")
 			}
 
 			p.Ready()
 			<-p.Shutdown()
 
-			if !args.nosearch {
+			if !tele.nosearch {
 				restore()
 			}
 
@@ -511,17 +512,17 @@ var (
 	ABORTED = errors.New("aborted")
 )
 
-func bridges(p *supervisor.Process, args *Args) {
+func bridges(p *supervisor.Process, tele *Teleproxy) {
 	sup := p.Supervisor()
 
-	connect(p, args)
+	connect(p, tele)
 
 	sup.Supervise(&supervisor.Worker{
 		Name: K8S_BRIDGE,
 		Work: func(p *supervisor.Process) error {
 			// setup kubernetes bridge
 
-			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
+			kubeinfo := k8s.NewKubeInfo(tele.kubeconfig, tele.context, tele.namespace)
 
 			// Set up DNS search path based on current Kubernetes namespace
 			namespace, err := kubeinfo.Namespace()
@@ -695,19 +696,19 @@ spec:
       containerPort: 8022
 `
 
-func connect(p *supervisor.Process, args *Args) {
+func connect(p *supervisor.Process, tele *Teleproxy) {
 	sup := p.Supervisor()
 
 	sup.Supervise(&supervisor.Worker{
 		Name: K8S_APPLY,
 		Work: func(p *supervisor.Process) (err error) {
-			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
+			kubeinfo := k8s.NewKubeInfo(tele.kubeconfig, tele.context, tele.namespace)
 			// setup remote teleproxy pod
-			args, err := kubeinfo.GetKubectlArray("apply", "-f", "-")
+			tele, err := kubeinfo.GetKubectlArray("apply", "-f", "-")
 			if err != nil {
 				return err
 			}
-			apply := p.Command("kubectl", args...)
+			apply := p.Command("kubectl", tele...)
 			apply.Stdin = strings.NewReader(TELEPROXY_POD)
 			err = apply.Start()
 			if err != nil {
@@ -730,12 +731,12 @@ func connect(p *supervisor.Process, args *Args) {
 		Retry:    true,
 		Work: func(p *supervisor.Process) (err error) {
 
-			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
-			args, err := kubeinfo.GetKubectlArray("port-forward", "pod/teleproxy", "8022")
+			kubeinfo := k8s.NewKubeInfo(tele.kubeconfig, tele.context, tele.namespace)
+			tele, err := kubeinfo.GetKubectlArray("port-forward", "pod/teleproxy", "8022")
 			if err != nil {
 				return err
 			}
-			pf := p.Command("kubectl", args...)
+			pf := p.Command("kubectl", tele...)
 			err = pf.Start()
 			if err != nil {
 				return
@@ -744,11 +745,11 @@ func connect(p *supervisor.Process, args *Args) {
 			err = p.DoClean(func() error {
 				err := pf.Wait()
 				if err != nil {
-					args, err := kubeinfo.GetKubectlArray("get", "pod/teleproxy")
+					tele, err := kubeinfo.GetKubectlArray("get", "pod/teleproxy")
 					if err != nil {
 						return err
 					}
-					inspect := p.Command("kubectl", args...)
+					inspect := p.Command("kubectl", tele...)
 					inspect.Run()
 				}
 				return err
