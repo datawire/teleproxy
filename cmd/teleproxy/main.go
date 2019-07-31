@@ -128,7 +128,7 @@ type Args struct {
 }
 
 func main() {
-	args := Args{}
+	args := &Args{}
 
 	var tp = &cobra.Command{
 		Use:           "teleproxy",
@@ -160,7 +160,7 @@ func main() {
 	}
 }
 
-func runTeleproxy(args Args) error {
+func runTeleproxy(args *Args) error {
 	if args.version {
 		args.mode = VERSION
 	}
@@ -254,7 +254,7 @@ func selfcheck(p *supervisor.Process) error {
 	return p.DoClean(curl.Wait, curl.Process.Kill)
 }
 
-func teleproxy(p *supervisor.Process, args Args) error {
+func teleproxy(p *supervisor.Process, args *Args) error {
 	sup := p.Supervisor()
 
 	if args.mode == DEFAULT || args.mode == INTERCEPT {
@@ -308,8 +308,7 @@ func teleproxy(p *supervisor.Process, args Args) error {
 					return err
 				}
 
-				kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
-				bridges(p, kubeinfo)
+				bridges(p, args)
 				return nil
 			},
 		})
@@ -361,7 +360,7 @@ func checkKubectl(p *supervisor.Process) error {
 // If dnsIP is empty, it will be detected from /etc/resolv.conf
 //
 // If fallbackIP is empty, it will default to Google DNS.
-func intercept(p *supervisor.Process, args Args) error {
+func intercept(p *supervisor.Process, args *Args) error {
 	if os.Geteuid() != 0 {
 		return errors.New("ERROR: teleproxy must be run as root or suid root")
 	}
@@ -512,20 +511,41 @@ var (
 	ABORTED = errors.New("aborted")
 )
 
-func bridges(p *supervisor.Process, kubeinfo *k8s.KubeInfo) error {
+func bridges(p *supervisor.Process, args *Args) {
 	sup := p.Supervisor()
 
-	connect(p, kubeinfo)
+	connect(p, args)
 
 	sup.Supervise(&supervisor.Worker{
 		Name: K8S_BRIDGE,
 		Work: func(p *supervisor.Process) error {
 			// setup kubernetes bridge
-			ns, err := kubeinfo.Namespace()
+
+			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
+
+			// Set up DNS search path based on current Kubernetes namespace
+			namespace, err := kubeinfo.Namespace()
 			if err != nil {
 				return err
 			}
-			p.Logf("kubernetes ns=%s", ns)
+			p.Logf("kubernetes namespace=%s", namespace)
+			paths := []string{
+				namespace + ".svc.cluster.local.",
+				"svc.cluster.local.",
+				"cluster.local.",
+				"",
+			}
+			log.Println("BRG: Setting DNS search path:", paths[0])
+			body, err := json.Marshal(paths)
+			if err != nil {
+				panic(err)
+			}
+			_, err = http.Post("http://teleproxy/api/search", "application/json", bytes.NewReader(body))
+			if err != nil {
+				log.Printf("BRG: error setting up search path: %v", err)
+				panic(err) // Because this will fail if we win the startup race
+			}
+
 			var w *k8s.Watcher
 
 			err = p.DoClean(func() error {
@@ -619,28 +639,6 @@ func bridges(p *supervisor.Process, kubeinfo *k8s.KubeInfo) error {
 		},
 	})
 
-	// Set up DNS search path based on current Kubernetes namespace
-	namespace, err := kubeinfo.Namespace()
-	if err != nil {
-		return err
-	}
-	paths := []string{
-		namespace + ".svc.cluster.local.",
-		"svc.cluster.local.",
-		"cluster.local.",
-		"",
-	}
-	log.Println("BRG: Setting DNS search path:", paths[0])
-	body, err := json.Marshal(paths)
-	if err != nil {
-		panic(err)
-	}
-	_, err = http.Post("http://teleproxy/api/search", "application/json", bytes.NewReader(body))
-	if err != nil {
-		log.Printf("BRG: error setting up search path: %v", err)
-		panic(err) // Because this will fail if we win the startup race
-	}
-
 	sup.Supervise(&supervisor.Worker{
 		Name: DKR_BRIDGE,
 		Work: func(p *supervisor.Process) error {
@@ -659,8 +657,6 @@ func bridges(p *supervisor.Process, kubeinfo *k8s.KubeInfo) error {
 			return nil
 		},
 	})
-
-	return nil
 }
 
 func post(tables ...route.Table) {
@@ -699,12 +695,13 @@ spec:
       containerPort: 8022
 `
 
-func connect(p *supervisor.Process, kubeinfo *k8s.KubeInfo) {
+func connect(p *supervisor.Process, args *Args) {
 	sup := p.Supervisor()
 
 	sup.Supervise(&supervisor.Worker{
 		Name: K8S_APPLY,
 		Work: func(p *supervisor.Process) (err error) {
+			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
 			// setup remote teleproxy pod
 			args, err := kubeinfo.GetKubectlArray("apply", "-f", "-")
 			if err != nil {
@@ -732,6 +729,8 @@ func connect(p *supervisor.Process, kubeinfo *k8s.KubeInfo) {
 		Requires: []string{K8S_APPLY},
 		Retry:    true,
 		Work: func(p *supervisor.Process) (err error) {
+
+			kubeinfo := k8s.NewKubeInfo(args.kubeconfig, args.context, args.namespace)
 			args, err := kubeinfo.GetKubectlArray("port-forward", "pod/teleproxy", "8022")
 			if err != nil {
 				return err
