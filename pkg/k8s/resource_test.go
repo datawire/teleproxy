@@ -41,3 +41,10 @@ func TestQKind(t *testing.T) {
 		}(testcase))
 	}
 }
+
+func TestDocker(t *testing.T) {
+	_, err := k8s.ExpandResource("docker.yaml")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
