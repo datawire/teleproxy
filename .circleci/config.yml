@@ -96,6 +96,7 @@ jobs:
       - golang-install:
           os: darwin
       - kubectl-install
+      - brew cask install docker
       - main
 
   machine-build:
