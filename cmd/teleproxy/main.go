@@ -115,6 +115,7 @@ var LOG_LEGEND = []struct {
 	{CHECK_READY, "The worker teleproxy uses to do a self check and signal the system it is ready."},
 }
 
+// Teleproxy contains state global to the teleproxy program.
 type Teleproxy struct {
 	mode       string
 	kubeconfig string
@@ -125,6 +126,7 @@ type Teleproxy struct {
 	nosearch   bool
 	nocheck    bool
 	version    bool
+	supervisor *supervisor.Supervisor
 	workers    []*supervisor.Worker
 }
 
@@ -179,10 +181,11 @@ func runTeleproxy(tele *Teleproxy) error {
 	// do this up front so we don't miss out on cleanup if someone
 	// Control-C's just after starting us
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	sup := supervisor.WithContext(ctx)
+	tele.supervisor = sup
 
 	sup.Supervise(&supervisor.Worker{
 		Name: TELEPROXY,
@@ -194,11 +197,27 @@ func runTeleproxy(tele *Teleproxy) error {
 	sup.Supervise(&supervisor.Worker{
 		Name: SIGNAL,
 		Work: func(p *supervisor.Process) error {
-			select {
-			case <-p.Shutdown():
-			case s := <-signalChan:
-				p.Logf("TPY: %v", s)
-				cancel()
+			for {
+				select {
+				case <-p.Shutdown():
+					return nil
+				case s := <-signalChan:
+					p.Logf("TPY: %v", s)
+					if s == syscall.SIGHUP {
+						for _, w := range tele.workers {
+							w.Shutdown()
+						}
+						for _, w := range tele.workers {
+							w.Wait()
+						}
+						for _, w := range tele.workers {
+							w.Restart()
+						}
+					} else {
+						cancel()
+						return nil
+					}
+				}
 			}
 			return nil
 		},
@@ -316,6 +335,11 @@ func teleproxy(p *supervisor.Process, tele *Teleproxy) error {
 	}
 
 	return nil
+}
+
+func (t *Teleproxy) addWorker(worker *supervisor.Worker) {
+	t.supervisor.Supervise(worker)
+	t.workers = append(t.workers, worker)
 }
 
 const KUBECTL_ERR = "kubectl version 1.10 or greater is required"
@@ -515,9 +539,9 @@ var (
 func bridges(p *supervisor.Process, tele *Teleproxy) {
 	sup := p.Supervisor()
 
-	connect(p, tele)
+	connect(tele)
 
-	sup.Supervise(&supervisor.Worker{
+	tele.addWorker(&supervisor.Worker{
 		Name: K8S_BRIDGE,
 		Work: func(p *supervisor.Process) error {
 			// setup kubernetes bridge
@@ -696,10 +720,8 @@ spec:
       containerPort: 8022
 `
 
-func connect(p *supervisor.Process, tele *Teleproxy) {
-	sup := p.Supervisor()
-
-	sup.Supervise(&supervisor.Worker{
+func connect(tele *Teleproxy) {
+	tele.addWorker(&supervisor.Worker{
 		Name: K8S_APPLY,
 		Work: func(p *supervisor.Process) (err error) {
 			kubeinfo := k8s.NewKubeInfo(tele.kubeconfig, tele.context, tele.namespace)
@@ -725,7 +747,7 @@ func connect(p *supervisor.Process, tele *Teleproxy) {
 		},
 	})
 
-	sup.Supervise(&supervisor.Worker{
+	tele.addWorker(&supervisor.Worker{
 		Name:     K8S_PORTFORWARD,
 		Requires: []string{K8S_APPLY},
 		Retry:    true,
@@ -760,7 +782,7 @@ func connect(p *supervisor.Process, tele *Teleproxy) {
 		},
 	})
 
-	sup.Supervise(&supervisor.Worker{
+	tele.addWorker(&supervisor.Worker{
 		Name:     K8S_SSH,
 		Requires: []string{K8S_PORTFORWARD},
 		Retry:    true,
