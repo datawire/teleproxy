@@ -19,6 +19,10 @@ func WithMachineLock(body func()) {
 	WithNamedMachineLock("default", body)
 }
 
+// WithNamedMachineLock executes the supplied body with a guarantee
+// that it is the only code running (via WithMachineLock) on the
+// machine. The name provides scope so this can be used in multiple
+// independent ways without conflicts.
 func WithNamedMachineLock(name string, body func()) {
 	filename := fmt.Sprintf(pattern, name)
 	var file *os.File
