@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
-	"runtime"
 	"strings"
 	"time"
 
@@ -193,7 +192,7 @@ func GetKubeconfig() string {
 
 	cmd := supervisor.Command(prefix, "sh", "-c", fmt.Sprintf("docker cp \"%s:%s\" - | tar -xO", id, k3sConfigPath))
 	kubeconfig := cmd.MustCapture(nil)
-	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", fmt.Sprintf("%s:%s", dockerIp(), k3sPort))
+	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", fmt.Sprintf("%s:%s", dockerIP(), k3sPort))
 	return kubeconfig
 }
 
@@ -234,22 +233,6 @@ func RegistryUp() string {
 		"registry:2")
 }
 
-func isDockerMachine() bool {
-	if runtime.GOOS != "darwin" {
-		return false
-	}
-
-	if os.Getenv("DOCKER_HOST") != "" {
-		return true
-	}
-
-	if os.Getenv("DOCKER_MACHINE_NAME") != "" {
-		return true
-	}
-
-	return false
-}
-
 func dockerIP() string {
 	return "localhost"
 }
@@ -263,7 +246,7 @@ func DockerRegistry() string {
 
 	RegistryUp()
 
-	return fmt.Sprintf("%s:%s", dockerIp(), registryPort)
+	return fmt.Sprintf("%s:%s", dockerIP(), registryPort)
 }
 
 const dtestKubeconfig = "DTEST_KUBECONFIG"
