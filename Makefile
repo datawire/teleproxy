@@ -1,13 +1,7 @@
-include build-aux/kubernaut-ui.mk
 include build-aux/common.mk
 include build-aux/go-mod.mk
 include build-aux/go-version.mk
-include build-aux/docker.mk
 include build-aux/help.mk
-include build-aux/k8s.mk
-include build-aux/teleproxy.mk
-
-check: $(_kubernaut-ui.KUBECONFIG)
 
 # Utility targets
 
