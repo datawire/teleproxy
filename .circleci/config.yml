@@ -93,6 +93,7 @@ jobs:
     working_directory: ~/repo
     steps:
       - run: brew cask install docker
+      - run: ln -s /Applications/Docker.app/Contents/Resources/bin /usr/local/bin/docker
       - aws-install
       - golang-install:
           os: darwin
