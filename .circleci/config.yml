@@ -93,6 +93,7 @@ jobs:
     working_directory: ~/repo
     steps:
       - run: brew cask install docker
+      - run: ln -s /Applications/Docker.app/Contents/Resources/bin/docker /usr/local/bin/
       - run: open --background -a Docker && while ! docker system info; do sleep 1; done
       - aws-install
       - golang-install:
