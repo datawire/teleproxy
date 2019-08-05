@@ -92,7 +92,7 @@ func getKubeconfig() string {
 
 	cmd := supervisor.Command(prefix, "sh", "-c", fmt.Sprintf("docker cp \"%s:%s\" - | tar -xO", id, k3sConfigPath))
 	kubeconfig := cmd.MustCapture(nil)
-	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", fmt.Sprintf("%s:%s", dockerIp(), k3sPort))
+	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", fmt.Sprintf("%s:%s", dockerIP(), k3sPort))
 	return kubeconfig
 }
 
@@ -124,7 +124,7 @@ func DockerRegistry() string {
 
 	regUp()
 
-	return fmt.Sprintf("%s:%s", dockerIp(), registryPort)
+	return fmt.Sprintf("%s:%s", dockerIP(), registryPort)
 }
 
 const dtestKubeconfig = "DTEST_KUBECONFIG"
