@@ -94,13 +94,13 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - brew-cache
+            - brew-cache-1
       - run: brew install docker-machine-driver-xhyve docker &&
              sudo chown root:wheel /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve &&
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
       - run: docker-machine create default --driver xhyve
       - save_cache:
-          key: brew-cache
+          key: brew-cache-1
           paths:
             - /usr/local/Homebrew
             - ".docker"
