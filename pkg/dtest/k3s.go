@@ -109,7 +109,7 @@ func regUp() string {
 
 func dockerIP() string {
 	if runtime.GOOS == "darwin" {
-		return supervisor.Command(prefix, "docker-machine", "ip").MustCapture(nil)
+		return strings.TrimSpace(supervisor.Command(prefix, "docker-machine", "ip").MustCapture(nil))
 	}
 
 	return "localhost"
