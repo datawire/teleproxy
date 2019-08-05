@@ -97,7 +97,7 @@ jobs:
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
       - run:
           name: Docker Virtual Machine
-          command: docker-machine create default --driver xhyve
+          command: docker-machine create default --driver xhyve && sleep 3600
           background: true
       - run: until docker-machine env; do sleep 1; done && docker-machine env >> ${BASH_ENV}
       - run: docker system info
