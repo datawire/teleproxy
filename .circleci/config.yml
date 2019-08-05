@@ -100,7 +100,7 @@ jobs:
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
       - run: docker-machine create default --driver xhyve
       - save_cache:
-          keys:
+          key:
             - brew-cache
           paths: /usr/local/Homebrew
           when: always
