@@ -99,7 +99,7 @@ jobs:
           name: Docker Virtual Machine
           command: docker-machine create default --driver xhyve
           background: true
-      - run: docker-machine env >> ${BASH_ENV}
+      - run: until docker-machine env; do sleep 1; done && docker-machine env >> ${BASH_ENV}
       - run: docker system info
       - aws-install
       - golang-install:
