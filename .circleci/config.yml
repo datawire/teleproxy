@@ -101,7 +101,9 @@ jobs:
       - run: docker-machine create default --driver xhyve
       - save_cache:
           key: brew-cache
-          paths: /usr/local/Homebrew
+          paths:
+            - /usr/local/Homebrew
+            - ".docker"
           when: always
       - aws-install
       - golang-install:
