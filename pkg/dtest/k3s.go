@@ -107,12 +107,12 @@ func regUp() string {
 		"registry:2")
 }
 
-func dockerIp() string {
+func dockerIP() string {
 	if runtime.GOOS == "darwin" {
 		return supervisor.Command(prefix, "docker-machine", "ip").MustCapture(nil)
-	} else {
-		return "localhost"
 	}
+
+	return "localhost"
 }
 
 // DockerRegistry returns a docker registry suitable for use in tests.
