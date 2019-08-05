@@ -96,7 +96,7 @@ jobs:
              sudo chown root:wheel /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve &&
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
       - run: docker-machine create default --driver xhyve
-      - run: sleep 10
+      - run: docker-machine start
       - run: docker-machine env >> ${BASH_ENV}
       - run: docker system info
       - aws-install
