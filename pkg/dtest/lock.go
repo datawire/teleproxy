@@ -6,9 +6,9 @@ import (
 	"syscall"
 )
 
-const filename = "/tmp/datawire-machine-scoped.lock"
+const pattern = "/tmp/datawire-machine-scoped-%s.lock"
 
-func exit(err error) {
+func exit(filename string, err error) {
 	fmt.Fprintf(os.Stderr, "error trying to acquire lock on %s: %v\n", filename, err)
 	os.Exit(1)
 }
@@ -16,6 +16,11 @@ func exit(err error) {
 // WithMachineLock executes the supplied body with a guarantee that it
 // is the only code running (via WithMachineLock) on the machine.
 func WithMachineLock(body func()) {
+	WithNamedMachineLock("default", body)
+}
+
+func WithNamedMachineLock(name string, body func()) {
+	filename := fmt.Sprintf(pattern, name)
 	var file *os.File
 	var err error
 	func() {
@@ -26,13 +31,13 @@ func WithMachineLock(body func()) {
 	}()
 
 	if err != nil {
-		exit(err)
+		exit(filename, err)
 	}
 
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
 	if err != nil {
 		err = &os.PathError{Op: "flock", Path: file.Name(), Err: err}
-		exit(err)
+		exit(filename, err)
 	}
 	defer func() {
 		file.Close()

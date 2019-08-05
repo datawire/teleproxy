@@ -46,14 +46,18 @@ func tag2id(tag string) string {
 }
 
 func dockerUp(tag string, args ...string) string {
-	id := tag2id(tag)
+	var id string
 
-	if id == "" {
-		cmd := supervisor.Command(prefix, "docker", append([]string{"run", "-d", "-l",
-			fmt.Sprintf("scope=%s", scope), "-l", tag, "--rm"}, args...)...)
-		out := cmd.MustCapture(nil)
-		id = strings.TrimSpace(out)[:12]
-	}
+	WithNamedMachineLock("docker", func() {
+		id = tag2id(tag)
+
+		if id == "" {
+			cmd := supervisor.Command(prefix, "docker", append([]string{"run", "-d", "-l",
+				fmt.Sprintf("scope=%s", scope), "-l", tag, "--rm"}, args...)...)
+			out := cmd.MustCapture(nil)
+			id = strings.TrimSpace(out)[:12]
+		}
+	})
 
 	return id
 }
