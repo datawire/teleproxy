@@ -92,10 +92,18 @@ jobs:
       xcode: "9.0"
     working_directory: ~/repo
     steps:
+      - restore_cache:
+          keys:
+            - brew-cache
       - run: brew install docker-machine-driver-xhyve docker &&
              sudo chown root:wheel /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve &&
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
       - run: docker-machine create default --driver xhyve
+      - save_cache:
+          keys:
+            - brew-cache
+          paths: /usr/local/Homebrew
+          when: always
       - aws-install
       - golang-install:
           os: darwin
