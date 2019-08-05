@@ -94,7 +94,10 @@ jobs:
     steps:
       - run: brew cask install docker
       - run: ln -s /Applications/Docker.app/Contents/Resources/bin/docker /usr/local/bin/
-      - run: open --background -a Docker && while ! docker system info; do sleep 1; done
+      - run: ln -s /Applications/Docker.app/Contents/Resources/bin/docker-machine /usr/local/bin/
+      - run: docker-machine start default || true
+      - run: docker-machine env default >> ${BASH_ENV}
+      - run: docker system info
       - aws-install
       - golang-install:
           os: darwin
