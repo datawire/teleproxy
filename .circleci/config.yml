@@ -67,7 +67,7 @@ commands:
     steps:
       - checkout
       - restore-go-mod-cache
-      - run: make check
+      - run: .circleci/with-docker.sh make check
       - save-go-mod-cache
       - run: make build
       - run:
@@ -95,12 +95,7 @@ jobs:
       - run: brew install docker-machine-driver-xhyve docker &&
              sudo chown root:wheel /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve &&
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
-      - run:
-          name: Docker Virtual Machine
-          command: docker-machine create default --driver xhyve && sleep 3600
-          background: true
-      - run: until docker-machine env; do sleep 1; done && docker-machine env >> ${BASH_ENV}
-      - run: docker system info
+      - run: docker-machine create default --driver xhyve
       - aws-install
       - golang-install:
           os: darwin
