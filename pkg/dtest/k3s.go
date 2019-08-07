@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
-	"runtime"
 	"strings"
 	"time"
 
@@ -112,27 +111,7 @@ func RegistryUp() string {
 		"registry:2")
 }
 
-func isDockerMachine() bool {
-	if runtime.GOOS != "darwin" {
-		return false
-	}
-
-	if os.Getenv("DOCKER_HOST") != "" {
-		return true
-	}
-
-	if os.Getenv("DOCKER_MACHINE_NAME") != "" {
-		return true
-	}
-
-	return false
-}
-
 func dockerIP() string {
-	if isDockerMachine() {
-		return strings.TrimSpace(supervisor.Command(prefix, "docker-machine", "ip").MustCapture(nil))
-	}
-
 	return "localhost"
 }
 
