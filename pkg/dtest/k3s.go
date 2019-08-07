@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/user"
+	"runtime"
 	"strings"
 	"time"
 
@@ -82,7 +83,10 @@ func isK3sStarted() bool {
 
 const k3sConfigPath = "/etc/rancher/k3s/k3s.yaml"
 
-func getKubeconfig() string {
+// GetKubeconfig returns the kubeconfig contents for the running k3s
+// cluster as a string. It will return the empty string if no cluster
+// is running.
+func GetKubeconfig() string {
 	id := tag2id("k3s")
 
 	if id == "" {
@@ -98,12 +102,30 @@ func getKubeconfig() string {
 const dtestRegistry = "DTEST_REGISTRY"
 const registryPort = "5000"
 
-func regUp() string {
+// RegistryUp will launch if necessary and return the docker id of a
+// container running a docker registry.
+func RegistryUp() string {
 	return dockerUp("registry",
 		"-p", fmt.Sprintf("%s:6443", k3sPort),
 		"-p", fmt.Sprintf("%s:%s", registryPort, registryPort),
 		"-e", fmt.Sprintf("REGISTRY_HTTP_ADDR=0.0.0.0:%s", registryPort),
 		"registry:2")
+}
+
+func isDockerMachine() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+
+	if os.Getenv("DOCKER_HOST") != "" {
+		return true
+	}
+
+	if os.Getenv("DOCKER_MACHINE_NAME") != "" {
+		return true
+	}
+
+	return false
 }
 
 func dockerIP() string {
@@ -117,7 +139,7 @@ func DockerRegistry() string {
 		return registry
 	}
 
-	regUp()
+	RegistryUp()
 
 	return fmt.Sprintf("%s:%s", dockerIp(), registryPort)
 }
@@ -145,10 +167,8 @@ func Kubeconfig() string {
 		return kubeconfig
 	}
 
-	regid := regUp()
+	id := K3sUp()
 
-	id := dockerUp("k3s", "--privileged", "--network", fmt.Sprintf("container:%s", regid),
-		k3sImage, "server", "--node-name", "localhost", "--no-deploy", "traefik")
 	for {
 		if isK3sStarted() {
 			break
@@ -163,7 +183,7 @@ func Kubeconfig() string {
 	}
 
 	kubeconfig = fmt.Sprintf("/tmp/dtest-kubeconfig-%s-%s.yaml", user.Username, id)
-	contents := getKubeconfig()
+	contents := GetKubeconfig()
 
 	err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644)
 
@@ -172,4 +192,30 @@ func Kubeconfig() string {
 	}
 
 	return kubeconfig
+}
+
+// K3sUp will launch if necessary and return the docker id of a
+// container running a k3s cluster.
+func K3sUp() string {
+	regid := RegistryUp()
+	return dockerUp("k3s", "--privileged", "--network", fmt.Sprintf("container:%s", regid),
+		k3sImage, "server", "--node-name", "localhost", "--no-deploy", "traefik")
+}
+
+// K3sDown shuts down the k3s cluster.
+func K3sDown() string {
+	id := tag2id("k3s")
+	if id != "" {
+		dockerKill(id)
+	}
+	return id
+}
+
+// RegistryDown shutsdown the test registry.
+func RegistryDown() string {
+	id := tag2id("registry")
+	if id != "" {
+		dockerKill(id)
+	}
+	return id
 }
