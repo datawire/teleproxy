@@ -94,17 +94,30 @@ jobs:
     steps:
       - restore_cache:
           keys:
-            - brew-cache-1
-      - run: brew install docker-machine-driver-xhyve docker &&
+            - brew-cache-2
+      - run: brew install socat docker-machine-driver-xhyve docker &&
              sudo chown root:wheel /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve &&
              sudo chmod u+s /usr/local/opt/docker-machine-driver-xhyve/bin/docker-machine-driver-xhyve
-      - run: docker-machine create default --driver xhyve
+      - run:
+          name: Docker Virtual Machine
+          command: docker-machine create default --driver xhyve && sleep 7200
+          background: true
+      - run: until docker-machine env; do sleep 3; done && docker-machine env >> ${BASH_ENV}
+      - run: docker system info
       - save_cache:
-          key: brew-cache-1
+          key: brew-cache-2
           paths:
             - /usr/local/Homebrew
             - ".docker"
           when: always
+      - run:
+          name: Registry Port Forward
+          command: socat tcp-listen:5000,reuseaddr,fork tcp:$(docker-machine ip):5000
+          background: true
+      - run:
+          name: K3s Port Forward
+          command: socat tcp-listen:6443,reuseaddr,fork tcp:$(docker-machine ip):6443
+          background: true
       - aws-install
       - golang-install:
           os: darwin
