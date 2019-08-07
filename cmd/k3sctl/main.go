@@ -113,7 +113,7 @@ func main() {
 
 	k3s.AddCommand(version)
 
-	config.RunE = func(cmd *cobra.Command, args []string) error {
+	version.RunE = func(cmd *cobra.Command, args []string) error {
 		fmt.Println("k3sctl", "version", Version)
 		return nil
 	}
