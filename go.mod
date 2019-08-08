@@ -35,7 +35,7 @@ require (
 	github.com/duosecurity/duo_api_golang v0.0.0-20190308151101-6c680f768e74 // indirect
 	github.com/ecodia/golang-awaitility v0.0.0-20180710094957-fb55e59708c7
 	github.com/envoyproxy/go-control-plane v0.6.9 // indirect
-	github.com/ericchiang/k8s v1.2.0
+	github.com/ericchiang/k8s v1.2.0 // indirect
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/fullsailor/pkcs7 v0.0.0-20180613152042-8306686428a5 // indirect
 	github.com/gammazero/deque v0.0.0-20190130191400-2afb3858e9c7 // indirect
@@ -91,7 +91,7 @@ require (
 	github.com/huandu/xstrings v1.2.0 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/influxdata/influxdb v1.7.4 // indirect
-	github.com/influxdata/platform v0.0.0-20190117200541-d500d3cf5589
+	github.com/influxdata/platform v0.0.0-20190117200541-d500d3cf5589 // indirect
 	github.com/jeffchao/backoff v0.0.0-20140404060208-9d7fd7aa17f2 // indirect
 	github.com/jefferai/jsonx v1.0.0 // indirect
 	github.com/jonboulle/clockwork v0.1.0 // indirect
