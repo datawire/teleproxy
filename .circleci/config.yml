@@ -67,7 +67,7 @@ commands:
     steps:
       - checkout
       - restore-go-mod-cache
-      - run: docker build .
+      - run: go mod vendor
       - run: make check
       - save-go-mod-cache
       - run: make build
