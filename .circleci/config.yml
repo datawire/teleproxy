@@ -67,7 +67,8 @@ commands:
     steps:
       - checkout
       - restore-go-mod-cache
-      - run: .circleci/with-docker.sh make check
+      - run: docker build .
+      - run: make check
       - save-go-mod-cache
       - run: make build
       - run:
