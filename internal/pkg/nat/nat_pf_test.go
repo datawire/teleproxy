@@ -55,8 +55,7 @@ func (e *env) setup() {
 
 func (e *env) teardown() {
 	supervisor.MustRun("teardown", func(p *supervisor.Process) error {
-		pf(p, []string{"-F", "all"}, "")
-		pf(p, []string{"-f", "/dev/stdin"}, e.before)
-		return nil
+		_ = pf(p, []string{"-F", "all"}, "")
+		return pf(p, []string{"-f", "/dev/stdin"}, e.before)
 	})
 }
