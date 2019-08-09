@@ -28,8 +28,8 @@ var environments = []env{
 
 func (e *env) setup() {
 	supervisor.MustRun("setup", func(p *supervisor.Process) error {
-		output := string(p.Command("pfctl", "-sr").MustCapture(nil))
-		output += string(p.Command("pfctl", "-sn").MustCapture(nil))
+		output := p.Command("pfctl", "-sr").MustCapture(nil)
+		output += p.Command("pfctl", "-sn").MustCapture(nil)
 		lines := strings.Split(output, "\n")
 
 		for _, kw := range []string{"scrub-anchor", "nat-anchor", "rdr-anchor", "anchor"} {
