@@ -68,7 +68,7 @@ commands:
       - checkout
       - restore-go-mod-cache
       - run: go mod vendor
-      - run: make check
+      - run: if [ "$(go env GOOS)" != "darwin" ]; then make check; fi
       - save-go-mod-cache
       - run: make build
       - run:
