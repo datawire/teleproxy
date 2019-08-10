@@ -166,8 +166,8 @@ go-lint: $(GOLANGCI_LINT) go-get $(go.lock)
 .PHONY: go-lint
 
 go-fmt: ## (Go) Fixup the code with `go fmt`
-go-fmt: go-get $(go.lock)
-	$(go.lock)go fmt $(go.pkgs)
+go-fmt: $(GOLANGCI_LINT) go-get $(go.lock)
+	$(go.lock)$(GOLANGCI_LINT) run --fix $(go.GOLANG_LINT_FLAGS) $(go.pkgs) || true
 .PHONY: go-fmt
 
 go-test: ## (Go) Check the code with `go test`
