@@ -54,7 +54,7 @@ func runWatt(cmd *cobra.Command, args []string) {
 	os.Exit(_runWatt(cmd, args))
 }
 
-func _runWatt(cmd *cobra.Command, args []string) int {
+func _runWatt(_ *cobra.Command, _ []string) int {
 	if showVersion {
 		fmt.Println("watt", Version)
 		return 0

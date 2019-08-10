@@ -135,12 +135,11 @@ var WATCH = ConsulWatchSpec{
 //      consul services...
 func TestAggregatorBootstrap(t *testing.T) {
 	watchHook := func(p *supervisor.Process, snapshot string) WatchSet {
-		if strings.Contains(snapshot, "configmap") {
-			return WatchSet{
-				ConsulWatches: []ConsulWatchSpec{WATCH},
-			}
-		} else {
+		if !strings.Contains(snapshot, "configmap") {
 			return WatchSet{}
+		}
+		return WatchSet{
+			ConsulWatches: []ConsulWatchSpec{WATCH},
 		}
 	}
 	iso := startAggIsolator(t, []string{"service", "configmap"}, watchHook)
@@ -174,7 +173,7 @@ func TestAggregatorBootstrap(t *testing.T) {
 	// now lets send in the first endpoints, and we should get a
 	// snapshot
 	iso.aggregator.ConsulEvents <- consulEvent{
-		WATCH.WatchId(),
+		WATCH.WatchID(),
 		consulwatch.Endpoints{
 			Service: "bar",
 			Endpoints: []consulwatch.Endpoint{

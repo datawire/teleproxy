@@ -400,7 +400,7 @@ func TestRetry(t *testing.T) {
 		Error: "oops",
 		Retry: true,
 		OnReady: func(spec *Spec) {
-			count += 1
+			count++
 			if count == N {
 				spec.process.Supervisor().Shutdown()
 			}

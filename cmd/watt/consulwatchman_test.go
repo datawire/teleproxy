@@ -23,7 +23,7 @@ type consulwatchmanIsolator struct {
 }
 
 func TestAddAndRemoveConsulWatchers(t *testing.T) {
-	iso := startConsulwatchmanIsolator(t)
+	iso := startConsulwatchmanIsolator()
 	defer iso.Stop()
 
 	specs := []ConsulWatchSpec{
@@ -86,8 +86,8 @@ func TestAddAndRemoveConsulWatchers(t *testing.T) {
 	}
 }
 
-func startConsulwatchmanIsolator(t *testing.T) *consulwatchmanIsolator {
-	iso := newConsulwatchmanIsolator(t)
+func startConsulwatchmanIsolator() *consulwatchmanIsolator {
+	iso := newConsulwatchmanIsolator()
 	iso.Start()
 	return iso
 }
@@ -108,7 +108,7 @@ func (iso *consulwatchmanIsolator) Stop() {
 	<-iso.done
 }
 
-func newConsulwatchmanIsolator(t *testing.T) *consulwatchmanIsolator {
+func newConsulwatchmanIsolator() *consulwatchmanIsolator {
 	iso := &consulwatchmanIsolator{
 		// by using zero length channels for inputs here, we can
 		// control the total ordering of all inputs and therefore

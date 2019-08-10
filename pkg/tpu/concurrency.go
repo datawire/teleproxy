@@ -43,6 +43,6 @@ func (l Latch) Notify() {
 func (l Latch) Wait() {
 	for l.count > 0 {
 		<-l.ch
-		l.count -= 1
+		l.count--
 	}
 }

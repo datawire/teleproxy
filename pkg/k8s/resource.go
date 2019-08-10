@@ -151,9 +151,8 @@ func (m Metadata) QName() string {
 	ns := m.Namespace()
 	if ns == "" {
 		return m.Name()
-	} else {
-		return fmt.Sprintf("%s.%s", m.Name(), ns)
 	}
+	return fmt.Sprintf("%s.%s", m.Name(), ns)
 }
 
 func (r Resource) QName() string { return r.Metadata().QName() }

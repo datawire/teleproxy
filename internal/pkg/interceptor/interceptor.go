@@ -121,9 +121,8 @@ func (i *Interceptor) Render(table string) string {
 	bytes, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		return err.Error()
-	} else {
-		return string(bytes)
 	}
+	return string(bytes)
 }
 
 func (i *Interceptor) Delete(table string) bool {
@@ -197,9 +196,9 @@ func (i *Interceptor) update(p *supervisor.Process, table rt.Table) error {
 			if oldRouteOk {
 				switch newRoute.Proto {
 				case "tcp":
-					i.translator.ClearTCP(p, oldRoute.Ip, oldRoute.Port)
+					i.translator.ClearTCP(p, oldRoute.IP, oldRoute.Port)
 				case "udp":
-					i.translator.ClearUDP(p, oldRoute.Ip, oldRoute.Port)
+					i.translator.ClearUDP(p, oldRoute.IP, oldRoute.Port)
 				default:
 					log.Printf("INT: unrecognized protocol: %v", newRoute)
 				}
@@ -208,9 +207,9 @@ func (i *Interceptor) update(p *supervisor.Process, table rt.Table) error {
 			if newRoute.Target != "" {
 				switch newRoute.Proto {
 				case "tcp":
-					i.translator.ForwardTCP(p, newRoute.Ip, newRoute.Port, newRoute.Target)
+					i.translator.ForwardTCP(p, newRoute.IP, newRoute.Port, newRoute.Target)
 				case "udp":
-					i.translator.ForwardUDP(p, newRoute.Ip, newRoute.Port, newRoute.Target)
+					i.translator.ForwardUDP(p, newRoute.IP, newRoute.Port, newRoute.Target)
 				default:
 					log.Printf("INT: unrecognized protocol: %v", newRoute)
 				}
@@ -233,9 +232,9 @@ func (i *Interceptor) update(p *supervisor.Process, table rt.Table) error {
 
 		switch route.Proto {
 		case "tcp":
-			i.translator.ClearTCP(p, route.Ip, route.Port)
+			i.translator.ClearTCP(p, route.IP, route.Port)
 		case "udp":
-			i.translator.ClearUDP(p, route.Ip, route.Port)
+			i.translator.ClearUDP(p, route.IP, route.Port)
 		default:
 			log.Printf("INT: unrecognized protocol: %v", route)
 		}

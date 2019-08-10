@@ -119,7 +119,7 @@ func (w *Watcher) waiter() chan empty {
 		var events *bufio.Reader
 
 		for {
-			for count := 0; true; count += 1 {
+			for count := 0; true; count++ {
 				if w.checkDocker((count % 60) == 0) {
 					break
 				} else {

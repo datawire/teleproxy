@@ -5,7 +5,7 @@ import "time"
 // Endpoints contains an Array of Endpoint structs and meta information about the Service that the contained endpoints
 // are associated with.
 type Endpoints struct {
-	Id        string     `json:""`
+	ID        string     `json:""`
 	Service   string     `json:""`
 	Endpoints []Endpoint `json:""`
 }

@@ -28,7 +28,7 @@ func (w *Worker) Error() string {
 	if w.error == nil {
 		return "worker without an error"
 	}
-	return fmt.Sprintf("%s: %s", w.Name, w.error.Error())
+	return fmt.Sprintf("%s: %v", w.Name, w.error)
 }
 
 func (w *Worker) reset() {

@@ -39,8 +39,6 @@ issues:
     - Use of unsafe calls should be audited
     # gosec: Too many false-positives for parametrized shell calls
     - Subprocess launch(ed with variable|ing should be audited)
-    # gosec: Duplicated errcheck checks
-    - G104
     # gosec: Too many issues in popular repos
     - (Expect directory permissions to be 0750 or less|Expect file permissions to be 0600 or less)
     # gosec: False positive is triggered by 'src, err := ioutil.ReadFile(filename)'
@@ -48,6 +46,13 @@ issues:
     # unparam: Some things need to return error even when that's always nil
     - result 0 [(]error[)] is always nil
   exclude-rules:
+    # duplicates errcheck (part of exclude-use-default)
+    - linters: [gosec]
+      text: "G104"
     # scopelint seems to be buggy and says things that don't syntactically make sense.
     - linters: [scopelint]
       text: "^Using the variable on range scope `.*` in function literal$"
+    # unparam complains if a function is always called with the same
+    # argument.  That's a silly thing to check for.
+    - linters: [unparam]
+      text: "^.* always receives `.*`$"

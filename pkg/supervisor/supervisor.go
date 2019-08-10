@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// A supervisor provides an abstraction for managing a group of
+// A Supervisor provides an abstraction for managing a group of
 // related goroutines, and provides:
 //
 // - startup and shutdown ordering based on dependencies
@@ -81,7 +81,7 @@ func (s *Supervisor) remove(worker *Worker) {
 	s.names = newNames
 }
 
-// A supervisor will run until all its workers exit. There are
+// Run runs all workers and block until all workers exit. There are
 // multiple ways workers can exit:
 //
 //   - normally (returning a non-nil error)
@@ -132,16 +132,16 @@ func (s *Supervisor) Run() []error {
 	return s.errors
 }
 
-// Triggers a graceful shutdown sequence. This can be invoked from any
-// goroutine.
+// Shutdown triggers a graceful shutdown sequence. This can be invoked
+// from any goroutine.
 func (s *Supervisor) Shutdown() {
 	s.change(func() {
 		s.wantsShutdown = true
 	})
 }
 
-// Gets the worker with the specified name. Will return nil if no such
-// worker exists.
+// Get returns the worker with the specified name. Will return nil if
+// no such worker exists.
 func (s *Supervisor) Get(name string) *Worker {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

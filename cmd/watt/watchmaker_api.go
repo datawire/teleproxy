@@ -26,7 +26,7 @@ func (w *WatchSet) interpolate() WatchSet {
 		modifiedConsulWatchSpecs := make([]ConsulWatchSpec, 0)
 		for _, s := range w.ConsulWatches {
 			modifiedConsulWatchSpecs = append(modifiedConsulWatchSpecs, ConsulWatchSpec{
-				Id:            s.Id,
+				ID:            s.ID,
 				ServiceName:   s.ServiceName,
 				Datacenter:    s.Datacenter,
 				ConsulAddress: os.ExpandEnv(s.ConsulAddress),
@@ -49,23 +49,22 @@ type KubernetesWatchSpec struct {
 func star(s string) string {
 	if s == "" {
 		return "*"
-	} else {
-		return s
 	}
+	return s
 }
 
-func (k KubernetesWatchSpec) WatchId() string {
+func (k KubernetesWatchSpec) WatchID() string {
 	return fmt.Sprintf("%s|%s|%s|%s", k.Kind, star(k.Namespace), star(k.FieldSelector), star(k.LabelSelector))
 }
 
 type ConsulWatchSpec struct {
-	Id            string `json:"id"`
+	ID            string `json:"id"`
 	ConsulAddress string `json:"consul-address"`
 	Datacenter    string `json:"datacenter"`
 	ServiceName   string `json:"service-name"`
 }
 
-func (c ConsulWatchSpec) WatchId() string {
+func (c ConsulWatchSpec) WatchID() string {
 	return fmt.Sprintf("%s|%s|%s", c.ConsulAddress, c.Datacenter, c.ServiceName)
 }
 

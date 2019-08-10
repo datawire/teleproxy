@@ -8,7 +8,7 @@ import (
 )
 
 type k8sEvent struct {
-	watchId   string
+	watchID   string
 	kind      string
 	resources []k8s.Resource
 }
@@ -23,20 +23,20 @@ func (m *KubernetesWatchMaker) MakeKubernetesWatch(spec KubernetesWatchSpec) (*s
 	var err error
 
 	worker = &supervisor.Worker{
-		Name: fmt.Sprintf("kubernetes:%s", spec.WatchId()),
+		Name: fmt.Sprintf("kubernetes:%s", spec.WatchID()),
 		Work: func(p *supervisor.Process) error {
 			watcher := m.kubeAPI.Watcher()
-			watchFunc := func(watchId, ns, kind string) func(watcher *k8s.Watcher) {
+			watchFunc := func(watchID, ns, kind string) func(watcher *k8s.Watcher) {
 				return func(watcher *k8s.Watcher) {
 					resources := watcher.List(kind)
 					p.Logf("found %d %q in namespace %q", len(resources), kind, fmtNamespace(ns))
-					m.notify <- k8sEvent{watchId: watchId, kind: kind, resources: resources}
+					m.notify <- k8sEvent{watchID: watchID, kind: kind, resources: resources}
 					p.Logf("sent %q to receivers", kind)
 				}
 			}
 
 			watcherErr := watcher.SelectiveWatch(spec.Namespace, spec.Kind, spec.FieldSelector, spec.LabelSelector,
-				watchFunc(spec.WatchId(), spec.Namespace, spec.Kind))
+				watchFunc(spec.WatchID(), spec.Namespace, spec.Kind))
 
 			if watcherErr != nil {
 				return watcherErr

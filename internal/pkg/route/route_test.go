@@ -23,7 +23,7 @@ var tables = []struct {
 		&Table{
 			Name: "table",
 			Routes: []Route{
-				{Name: "foo", Ip: "bar", Proto: "baz"},
+				{Name: "foo", IP: "bar", Proto: "baz"},
 			},
 		}, ""},
 }

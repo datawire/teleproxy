@@ -430,7 +430,7 @@ func intercept(p *supervisor.Process, tele *Teleproxy) error {
 				Resolve: func(domain string) string {
 					route := iceptor.Resolve(domain)
 					if route != nil {
-						return route.Ip
+						return route.IP
 					}
 					return ""
 				},
@@ -472,13 +472,13 @@ func intercept(p *supervisor.Process, tele *Teleproxy) error {
 		Work: func(p *supervisor.Process) error {
 			bootstrap := route.Table{Name: "bootstrap"}
 			bootstrap.Add(route.Route{
-				Ip:     tele.DNSIP,
+				IP:     tele.DNSIP,
 				Target: DNSRedirPort,
 				Proto:  "udp",
 			})
 			bootstrap.Add(route.Route{
 				Name:   "teleproxy",
-				Ip:     MagicIP,
+				IP:     MagicIP,
 				Target: apis.Port(),
 				Proto:  "tcp",
 			})
@@ -599,7 +599,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 							qualName := svc.Name() + "." + svc.Namespace() + ".svc.cluster.local"
 							table.Add(route.Route{
 								Name:   qualName,
-								Ip:     ip,
+								IP:     ip,
 								Port:   ports,
 								Proto:  "tcp",
 								Target: ProxyRedirPort,
@@ -632,7 +632,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 						if ok && ip != "" {
 							table.Add(route.Route{
 								Name:   qname,
-								Ip:     ip.(string),
+								IP:     ip.(string),
 								Proto:  "tcp",
 								Target: ProxyRedirPort,
 							})
@@ -681,7 +681,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 			dw.Start(func(w *docker.Watcher) {
 				table := route.Table{Name: "docker"}
 				for name, ip := range w.Containers {
-					table.Add(route.Route{Name: name, Ip: ip, Proto: "tcp"})
+					table.Add(route.Route{Name: name, IP: ip, Proto: "tcp"})
 				}
 				post(table)
 			})
@@ -708,6 +708,7 @@ func post(tables ...route.Table) {
 	if err != nil {
 		log.Printf("BRG: error posting update to %s: %v", jnames, err)
 	} else {
+		resp.Body.Close()
 		log.Printf("BRG: posted update to %s: %v", jnames, resp.StatusCode)
 	}
 }

@@ -53,7 +53,7 @@ func (a *invoker) Work(p *supervisor.Process) error {
 func (a *invoker) storeSnapshot(snapshot string) int {
 	a.mux.Lock()
 	defer a.mux.Unlock()
-	a.id += 1
+	a.id++
 	a.invokedSnapshots[a.id] = snapshot
 	a.gcSnapshots()
 	return a.id

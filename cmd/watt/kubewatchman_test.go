@@ -12,7 +12,7 @@ import (
 )
 
 func TestAddAndRemoveKubernetesWatchers(t *testing.T) {
-	iso := startKubewatchmanIsolator(t)
+	iso := startKubewatchmanIsolator()
 	defer iso.Stop()
 
 	specs := []KubernetesWatchSpec{
@@ -84,8 +84,8 @@ type kubewatchmanIsolator struct {
 	cancel                          context.CancelFunc
 }
 
-func startKubewatchmanIsolator(t *testing.T) *kubewatchmanIsolator {
-	iso := newKubewatchmanIsolator(t)
+func startKubewatchmanIsolator() *kubewatchmanIsolator {
+	iso := newKubewatchmanIsolator()
 	iso.Start()
 	return iso
 }
@@ -106,7 +106,7 @@ func (iso *kubewatchmanIsolator) Stop() {
 	<-iso.done
 }
 
-func newKubewatchmanIsolator(t *testing.T) *kubewatchmanIsolator {
+func newKubewatchmanIsolator() *kubewatchmanIsolator {
 	iso := &kubewatchmanIsolator{
 		aggregatorToWatchmanCh: make(chan []KubernetesWatchSpec),
 

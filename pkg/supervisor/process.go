@@ -54,7 +54,7 @@ func (p *Process) Log(obj interface{}) {
 
 // Logf is used for logging...
 func (p *Process) Logf(format string, args ...interface{}) {
-	p.supervisor.Logger.Printf("%s: %v", p.Worker().Name, fmt.Sprintf(format, args...))
+	p.Log(fmt.Sprintf(format, args...))
 }
 
 func (p *Process) allocateID() int64 {

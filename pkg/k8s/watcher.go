@@ -13,8 +13,10 @@ import (
 	pwatch "k8s.io/apimachinery/pkg/watch"
 
 	"k8s.io/client-go/dynamic"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/cache"
+
+	// Import to initialize client auth plugins.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 type listWatchAdapter struct {
@@ -195,10 +197,10 @@ func (w *Watcher) Start() {
 	if w.started {
 		w.mutex.Unlock()
 		return
-	} else {
-		w.started = true
-		w.mutex.Unlock()
 	}
+	w.started = true
+	w.mutex.Unlock()
+
 	for kind := range w.watches {
 		w.sync(kind)
 	}
@@ -234,17 +236,16 @@ func (w *Watcher) List(kind string) []Resource {
 	if err != nil {
 		panic(err)
 	}
-	watch, ok := w.watches[ri]
-	if ok {
-		objs := watch.store.List()
-		result := make([]Resource, len(objs))
-		for idx, obj := range objs {
-			result[idx] = obj.(*unstructured.Unstructured).UnstructuredContent()
-		}
-		return result
-	} else {
+	watch, watchOK := w.watches[ri]
+	if !watchOK {
 		return nil
 	}
+	objs := watch.store.List()
+	result := make([]Resource, len(objs))
+	for idx, obj := range objs {
+		result[idx] = obj.(*unstructured.Unstructured).UnstructuredContent()
+	}
+	return result
 }
 
 func (w *Watcher) UpdateStatus(resource Resource) (Resource, error) {
@@ -270,10 +271,9 @@ func (w *Watcher) UpdateStatus(resource Resource) (Resource, error) {
 	result, err := cli.UpdateStatus(&uns, v1.UpdateOptions{})
 	if err != nil {
 		return nil, err
-	} else {
-		watch.store.Update(result)
-		return result.UnstructuredContent(), nil
 	}
+	watch.store.Update(result)
+	return result.UnstructuredContent(), nil
 }
 
 func (w *Watcher) Get(kind, qname string) Resource {

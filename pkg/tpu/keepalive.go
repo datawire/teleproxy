@@ -73,7 +73,7 @@ func (k *Keeper) Start() {
 				died <- nil
 			}()
 
-			count += 1
+			count++
 
 			select {
 			case <-died:

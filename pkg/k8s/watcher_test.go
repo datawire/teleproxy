@@ -50,9 +50,8 @@ func TestUpdateStatus(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	} else {
-		t.Logf("updated %s status, result: %v\n", svc.QName(), result.ResourceVersion())
 	}
+	t.Logf("updated %s status, result: %v\n", svc.QName(), result.ResourceVersion())
 
 	svc = fetch(k8s.MustNewWatcher(info()), "services", "kubernetes.default")
 	ingresses := svc.Status()["loadBalancer"].(map[string]interface{})["ingress"].([]interface{})
