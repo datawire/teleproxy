@@ -29,10 +29,6 @@ func NewStatusWriter(inner io.Writer) *StatusWriter {
 }
 
 func (sw *StatusWriter) writeStatus() error {
-	if len(sw.statuses) == 0 {
-		return nil
-	}
-
 	keyLen := 0
 	valLen := 0
 	keys := make([]string, 0, len(sw.statuses))
@@ -47,7 +43,11 @@ func (sw *StatusWriter) writeStatus() error {
 	}
 	sort.Strings(keys)
 
-	div := make([]byte, keyLen+2+valLen)
+	divLen := keyLen + 2 + valLen
+	if divLen < 4 {
+		divLen = 4
+	}
+	div := make([]byte, divLen)
 	for i := range div {
 		div[i] = '-'
 	}
@@ -80,7 +80,7 @@ func (sw *StatusWriter) Write(data []byte) (n int, err error) {
 		linecnt++
 	}
 	if linecnt > 0 {
-		if _, err := fmt.Fprintf(sw.inner, "\x1B[%dA%s", linecnt, sw.stateLastLine); err != nil {
+		if _, err := fmt.Fprintf(sw.inner, "\x1B[%dA\x1B[0K%s", linecnt, sw.stateLastLine); err != nil {
 			return 0, err
 		}
 	}
@@ -95,17 +95,17 @@ func (sw *StatusWriter) Write(data []byte) (n int, err error) {
 		}
 		sw.stateLastLine = line
 
-		if _, err := io.WriteString(sw.inner, "\x1B[0K"); err != nil {
-			return nbytes, err
-		}
-
 		if i < len(lines)-1 {
 			// normal line
-			n, err = io.WriteString(sw.inner, "\n")
+			n, err = io.WriteString(sw.inner, "\n\x1B[0K")
+			if n > 1 { // only count the leading NL toward nbytes
+				n = 1
+			}
 			nbytes += n
 			if err != nil {
 				return nbytes, err
 			}
+
 		} else {
 			// last line
 			if line != "" {
@@ -124,14 +124,27 @@ func (sw *StatusWriter) Write(data []byte) (n int, err error) {
 }
 
 func (sw *StatusWriter) SetStatus(key, val string) error {
-	sw.mu.Lock()
-	defer sw.mu.Unlock()
+	return sw.SetStatuses(map[string]string{key: val})
+}
 
-	if oldval, oldvalOK := sw.statuses[key]; oldvalOK && oldval == val {
+func (sw *StatusWriter) SetStatuses(vals map[string]string) error {
+	if vals == nil || len(vals) == 0 {
 		return nil
 	}
 
-	sw.statuses[key] = val
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	dirty := false
+	for key, newval := range vals {
+		if oldval, oldvalOK := sw.statuses[key]; !oldvalOK || oldval != newval {
+			dirty = true
+			sw.statuses[key] = newval
+		}
+	}
+	if !dirty {
+		return nil
+	}
 
 	if sw.stateStatusLineCnt > 0 {
 		if _, err := fmt.Fprintf(sw.inner, "\x1B[%dA", sw.stateStatusLineCnt); err != nil {

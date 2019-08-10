@@ -11,40 +11,56 @@ import (
 )
 
 type statusWriterTestStep struct {
-	Action     func(*kubeapply.StatusWriter)
+	Action     func(*testing.T, *kubeapply.StatusWriter)
 	Appearance string
 }
 
-func runTestcase(t *testing.T, testcase []statusWriterTestStep) {
+func iocheck(t *testing.T, nExp int, fn func() (int, error)) {
 	t.Helper()
+	nAct, e := fn()
+	if nAct != nExp {
+		t.Errorf("io: expected %d bytes, got %d", nExp, nAct)
+	}
+	if e != nil {
+		t.Errorf("io: unexpected error: %v", e)
+	}
+}
+
+func errcheck(t *testing.T, e error) {
+	t.Helper()
+	if e != nil {
+		t.Errorf("io: unexpected error: %v", e)
+	}
 }
 
 func TestStatusWriter(t *testing.T) {
 	testcases := map[string][]statusWriterTestStep{
 		"simple output, trailing newline": {
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "foo")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 4, func() (int, error) { return fmt.Fprintln(w, "foo") })
 				},
 				Appearance: "" +
 					"foo\n" +
+					"----\n" +
 					"",
 			},
 		},
 		"simple output, no trailing newline": {
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintf(w, "foo")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 3, func() (int, error) { return fmt.Fprintf(w, "foo") })
 				},
 				Appearance: "" +
 					"foo\n" +
+					"----\n" +
 					"",
 			},
 		},
 		"no output, but a status": {
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					w.SetStatus("A", "B")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("A", "B"))
 				},
 				Appearance: "" +
 					"----\n" +
@@ -54,17 +70,18 @@ func TestStatusWriter(t *testing.T) {
 		},
 		"moderately complex example": {
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "line 1")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 7, func() (int, error) { return fmt.Fprintln(w, "line 1") })
 				},
 				Appearance: "" +
 					"line 1\n" +
+					"----\n" +
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					w.SetStatus("Zoom", "Zombocom")
-					w.SetStatus("Bogart", "waiting")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("Zoom", "Zombocom"))
+					errcheck(t, w.SetStatus("Bogart", "waiting"))
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -74,8 +91,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintf(w, "line 2")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 6, func() (int, error) { return fmt.Fprintf(w, "line 2") })
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -86,8 +103,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					w.SetStatus("Zoom", ":(")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("Zoom", ":("))
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -98,8 +115,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, " more of line 2")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 16, func() (int, error) { return fmt.Fprintln(w, " more of line 2") })
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -110,8 +127,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "line 3")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 7, func() (int, error) { return fmt.Fprintln(w, "line 3") })
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -123,8 +140,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "line 4")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 7, func() (int, error) { return fmt.Fprintln(w, "line 4") })
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -137,8 +154,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					w.SetStatus("Bogart", "done")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("Bogart", "done"))
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -151,8 +168,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "line 5\nline 6")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 14, func() (int, error) { return fmt.Fprintln(w, "line 5\nline 6") })
 				},
 				Appearance: "" +
 					"line 1\n" +
@@ -169,8 +186,8 @@ func TestStatusWriter(t *testing.T) {
 		},
 		"carriage returns partially overwriting a line": {
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					w.SetStatus("A", "B")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("A", "B"))
 				},
 				Appearance: "" +
 					"----\n" +
@@ -178,8 +195,8 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintf(w, "foobar")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 6, func() (int, error) { return fmt.Fprintf(w, "foobar") })
 				},
 				Appearance: "" +
 					"foobar\n" +
@@ -188,14 +205,25 @@ func TestStatusWriter(t *testing.T) {
 					"",
 			},
 			{
-				Action: func(w *kubeapply.StatusWriter) {
-					fmt.Fprintln(w, "\rFOO\nbaz")
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					iocheck(t, 9, func() (int, error) { return fmt.Fprintln(w, "\rFOO\nbaz") })
 				},
 				Appearance: "" +
 					"FOObar\n" +
 					"baz\n" +
 					"----\n" +
 					"A: B\n" +
+					"",
+			},
+		},
+		"short status": {
+			{
+				Action: func(t *testing.T, w *kubeapply.StatusWriter) {
+					errcheck(t, w.SetStatus("A", ""))
+				},
+				Appearance: "" +
+					"----\n" +
+					"A: \n" +
 					"",
 			},
 		},
@@ -215,16 +243,18 @@ func TestStatusWriter(t *testing.T) {
 
 			w := kubeapply.NewStatusWriter(file)
 			for i, step := range testcase {
-				step.Action(w)
+				step.Action(t, w)
 				output, err := exec.Command("emacs", "--script", "testdata/term-render.el", file.Name()).Output()
 				if err != nil {
 					t.Fatalf("step %d: term-render: %v", i, err)
 				}
 				if string(output) != step.Appearance {
+					raw, _ := ioutil.ReadFile(file.Name())
 					t.Errorf("step %d: output rendered incorrectly\n"+
+						"Raw: %q\n"+
 						"Expected: %q\n"+
 						"Received: %q\n",
-						i, step.Appearance, string(output))
+						i, string(raw), step.Appearance, string(output))
 				}
 			}
 		})
