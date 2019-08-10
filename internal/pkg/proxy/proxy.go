@@ -5,8 +5,9 @@ import (
 	"log"
 	"net"
 
-	"github.com/datawire/teleproxy/pkg/tpu"
 	"golang.org/x/net/proxy"
+
+	"github.com/datawire/teleproxy/pkg/tpu"
 )
 
 type Proxy struct {
