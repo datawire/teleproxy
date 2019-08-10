@@ -87,32 +87,29 @@ func (sw *StatusWriter) Write(data []byte) (n int, err error) {
 
 	nbytes := 0
 	lines := strings.Split(string(data), "\n")
-	for i, line := range lines {
-		if i < len(lines)-1 {
-			// normal line
-			n, err := io.WriteString(sw.inner, line+"\n\x1B[0K")
-			if n > len(line)+1 { // don't count the "\x1B[0K" toward nbytes
-				n = len(line) + 1
-			}
-			nbytes += n
-			if err != nil {
-				return nbytes, err
-			}
-		} else {
-			// last line
-			if line != "" {
-				n, err := io.WriteString(sw.inner, line+"\n")
-				if n > len(line) { // don't count the "\n" toward nbytes
-					n = len(line)
-				}
-				nbytes += n
-				if err != nil {
-					return nbytes, err
-				}
-			}
+	// all lines EXCEPT for the last one
+	for _, line := range lines[:len(lines)-1] {
+		n, err := io.WriteString(sw.inner, line+"\n\x1B[0K")
+		if n > len(line)+1 { // don't count the "\x1B[0K" toward nbytes
+			n = len(line) + 1
 		}
-		sw.stateLastLine = line
+		nbytes += n
+		if err != nil {
+			return nbytes, err
+		}
 	}
+	// last line
+	if line := lines[len(lines)-1]; line != "" {
+		n, err := io.WriteString(sw.inner, line+"\n")
+		if n > len(line) { // don't count the "\n" toward nbytes
+			n = len(line)
+		}
+		nbytes += n
+		if err != nil {
+			return nbytes, err
+		}
+	}
+	sw.stateLastLine = lines[len(lines)-1]
 
 	if err := sw.writeStatus(); err != nil {
 		return nbytes, err
