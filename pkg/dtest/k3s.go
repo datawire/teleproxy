@@ -70,15 +70,109 @@ func dockerKill(ids ...string) {
 	}
 }
 
-func isK3sStarted() bool {
+func isKubeconfigReady() bool {
 	id := tag2id("k3s")
+
 	if id == "" {
 		return false
 	}
 
-	cmd := supervisor.Command(prefix, "docker", "logs", id)
-	output := cmd.MustCaptureErr(nil)
-	return strings.Contains(output, "Wrote kubeconfig")
+	cmd := supervisor.Command(prefix, "docker", "exec", "-i", id, "test", "-e", "/etc/rancher/k3s/k3s.yaml")
+	err := cmd.Start()
+	if err != nil {
+		panic(err)
+	}
+	_ = cmd.Wait()
+	return cmd.ProcessState.ExitCode() == 0
+}
+
+var requiredResources = []string{
+	"bindings",
+	"componentstatuses",
+	"configmaps",
+	"endpoints",
+	"events",
+	"limitranges",
+	"namespaces",
+	"nodes",
+	"persistentvolumeclaims",
+	"persistentvolumes",
+	"pods",
+	"podtemplates",
+	"replicationcontrollers",
+	"resourcequotas",
+	"secrets",
+	"serviceaccounts",
+	"services",
+	"mutatingwebhookconfigurations.admissionregistration.k8s.io",
+	"validatingwebhookconfigurations.admissionregistration.k8s.io",
+	"customresourcedefinitions.apiextensions.k8s.io",
+	"apiservices.apiregistration.k8s.io",
+	"controllerrevisions.apps",
+	"daemonsets.apps",
+	"deployments.apps",
+	"replicasets.apps",
+	"statefulsets.apps",
+	"tokenreviews.authentication.k8s.io",
+	"localsubjectaccessreviews.authorization.k8s.io",
+	"selfsubjectaccessreviews.authorization.k8s.io",
+	"selfsubjectrulesreviews.authorization.k8s.io",
+	"subjectaccessreviews.authorization.k8s.io",
+	"horizontalpodautoscalers.autoscaling",
+	"cronjobs.batch",
+	"jobs.batch",
+	"certificatesigningrequests.certificates.k8s.io",
+	"leases.coordination.k8s.io",
+	"daemonsets.extensions",
+	"deployments.extensions",
+	"ingresses.extensions",
+	"networkpolicies.extensions",
+	"podsecuritypolicies.extensions",
+	"replicasets.extensions",
+	"helmcharts.helm.cattle.io",
+	"addons.k3s.cattle.io",
+	"listenerconfigs.k3s.cattle.io",
+	"ingresses.networking.k8s.io",
+	"networkpolicies.networking.k8s.io",
+	"runtimeclasses.node.k8s.io",
+	"poddisruptionbudgets.policy",
+	"podsecuritypolicies.policy",
+	"clusterrolebindings.rbac.authorization.k8s.io",
+	"clusterroles.rbac.authorization.k8s.io",
+	"rolebindings.rbac.authorization.k8s.io",
+	"roles.rbac.authorization.k8s.io",
+	"priorityclasses.scheduling.k8s.io",
+	"csidrivers.storage.k8s.io",
+	"csinodes.storage.k8s.io",
+	"storageclasses.storage.k8s.io",
+	"volumeattachments.storage.k8s.io",
+}
+
+func isK3sReady() bool {
+	kubeconfig := getKubeconfigPath()
+
+	if kubeconfig == "" {
+		return false
+	}
+
+	cmd := supervisor.Command(prefix, "kubectl", "--kubeconfig", kubeconfig, "api-resources", "-o", "name")
+	output, err := cmd.Capture(nil)
+	if err != nil {
+		return false
+	}
+	resources := make(map[string]bool)
+	for _, line := range strings.Split(output, "\n") {
+		resources[strings.TrimSpace(line)] = true
+	}
+
+	for _, req := range requiredResources {
+		_, exists := resources[req]
+		if !exists {
+			return false
+		}
+	}
+
+	return true
 }
 
 const k3sConfigPath = "/etc/rancher/k3s/k3s.yaml"
@@ -87,6 +181,10 @@ const k3sConfigPath = "/etc/rancher/k3s/k3s.yaml"
 // cluster as a string. It will return the empty string if no cluster
 // is running.
 func GetKubeconfig() string {
+	if !isKubeconfigReady() {
+		return ""
+	}
+
 	id := tag2id("k3s")
 
 	if id == "" {
@@ -96,6 +194,30 @@ func GetKubeconfig() string {
 	cmd := supervisor.Command(prefix, "sh", "-c", fmt.Sprintf("docker cp \"%s:%s\" - | tar -xO", id, k3sConfigPath))
 	kubeconfig := cmd.MustCapture(nil)
 	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", fmt.Sprintf("%s:%s", dockerIp(), k3sPort))
+	return kubeconfig
+}
+
+func getKubeconfigPath() string {
+	id := tag2id("k3s")
+
+	if id == "" {
+		return ""
+	}
+
+	user, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
+
+	kubeconfig := fmt.Sprintf("/tmp/dtest-kubeconfig-%s-%s.yaml", user.Username, id)
+	contents := GetKubeconfig()
+
+	err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644)
+
+	if err != nil {
+		panic(err)
+	}
+
 	return kubeconfig
 }
 
@@ -167,31 +289,17 @@ func Kubeconfig() string {
 		return kubeconfig
 	}
 
-	id := K3sUp()
+	K3sUp()
 
 	for {
-		if isK3sStarted() {
+		if isK3sReady() {
 			break
 		} else {
 			time.Sleep(time.Second)
 		}
 	}
 
-	user, err := user.Current()
-	if err != nil {
-		panic(err)
-	}
-
-	kubeconfig = fmt.Sprintf("/tmp/dtest-kubeconfig-%s-%s.yaml", user.Username, id)
-	contents := GetKubeconfig()
-
-	err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644)
-
-	if err != nil {
-		panic(err)
-	}
-
-	return kubeconfig
+	return getKubeconfigPath()
 }
 
 // K3sUp will launch if necessary and return the docker id of a
