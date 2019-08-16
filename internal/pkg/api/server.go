@@ -29,21 +29,21 @@ func NewAPIServer(iceptor *interceptor.Interceptor) (*APIServer, error) {
 			result := iceptor.Render(table)
 			if result == "" {
 				http.NotFound(w, r)
-			} else {
-				w.Write(append([]byte(result), '\n'))
+				return
 			}
+			w.Write(append([]byte(result), '\n'))
 		case http.MethodPost:
 			d := json.NewDecoder(r.Body)
 			var table []route.Table
 			err := d.Decode(&table)
 			if err != nil {
-				http.Error(w, err.Error(), 400)
-			} else {
-				for _, t := range table {
-					iceptor.Update(t)
-				}
-				dns.Flush()
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
+			for _, t := range table {
+				iceptor.Update(t)
+			}
+			dns.Flush()
 		case http.MethodDelete:
 			iceptor.Delete(table)
 		}
@@ -55,18 +55,21 @@ func NewAPIServer(iceptor *interceptor.Interceptor) (*APIServer, error) {
 			paths = iceptor.GetSearchPath()
 			result, err := json.Marshal(paths)
 			if err != nil {
+				// The only way that `json.Marshal` should ever error is with
+				// unsupported types, or types with a custom `.MarshalJSON()` that
+				// validates the data first.  Because we call it on a `[]string`, it
+				// should never error here.
 				panic(err)
-			} else {
-				w.Write(result)
 			}
+			w.Write(result)
 		case http.MethodPost:
 			d := json.NewDecoder(r.Body)
 			err := d.Decode(&paths)
 			if err != nil {
-				http.Error(w, err.Error(), 400)
-			} else {
-				iceptor.SetSearchPath(paths)
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
 			}
+			iceptor.SetSearchPath(paths)
 		}
 	})
 	handler.HandleFunc("/api/shutdown", func(w http.ResponseWriter, r *http.Request) {
