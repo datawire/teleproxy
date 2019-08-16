@@ -117,7 +117,11 @@ func poll(t *testing.T, url string, expected string) bool {
 }
 
 func teleproxyCluster() {
-	os.Args = []string{"teleproxy", fmt.Sprintf("--kubeconfig=%s", dtest.Kubeconfig())}
+	kubeconfig, err := dtest.Kubeconfig()
+	if err != nil {
+		panic(err)
+	}
+	os.Args = []string{"teleproxy", fmt.Sprintf("--kubeconfig=%s", kubeconfig)}
 	main()
 }
 
@@ -164,7 +168,12 @@ var hup = testprocess.MakeSudo(func() {
 })
 
 func writeGoodFile(dest string) {
-	good, err := ioutil.ReadFile(dtest.Kubeconfig())
+	kubeconfig, err := dtest.Kubeconfig()
+	if err != nil {
+		panic(err)
+	}
+
+	good, err := ioutil.ReadFile(kubeconfig)
 	if err != nil {
 		panic(err)
 	}
@@ -184,7 +193,12 @@ func writeBadFile(dest string) {
 }
 
 func writeAltFile(dest string) {
-	good, err := ioutil.ReadFile(dtest.Kubeconfig())
+	kubeconfig, err := dtest.Kubeconfig()
+	if err != nil {
+		panic(err)
+	}
+
+	good, err := ioutil.ReadFile(kubeconfig)
 	if err != nil {
 		panic(err)
 	}

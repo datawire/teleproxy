@@ -16,8 +16,15 @@ func K8sApply(files ...string) {
 	if os.Getenv("DOCKER_REGISTRY") == "" {
 		os.Setenv("DOCKER_REGISTRY", DockerRegistry())
 	}
-	kubeconfig := Kubeconfig()
-	err := kubeapply.Kubeapply(k8s.NewKubeInfo(kubeconfig, "", ""), 300*time.Second, false, false, files...)
+
+	kubeconfig, err := Kubeconfig()
+	if err != nil {
+		fmt.Println()
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	err = kubeapply.Kubeapply(k8s.NewKubeInfo(kubeconfig, "", ""), 300*time.Second, false, false, files...)
 	if err != nil {
 		fmt.Println()
 		fmt.Println(err)

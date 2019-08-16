@@ -46,8 +46,10 @@ func main() {
 	k3s.AddCommand(up)
 
 	up.RunE = func(cmd *cobra.Command, args []string) error {
-		regid := dtest.RegistryUp()
-		k3sid := dtest.K3sUp()
+		regid, k3sid, err := dtest.K3sUp()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+		}
 		fmt.Printf("DOCKER_CONTAINER=%q\n", regid)
 		fmt.Printf("K3S_CONTAINER=%q\n", k3sid)
 		return nil
@@ -90,9 +92,9 @@ func main() {
 	k3s.AddCommand(config)
 
 	config.RunE = func(cmd *cobra.Command, args []string) error {
-		kubeconfig := dtest.GetKubeconfig()
-		if kubeconfig == "" {
-			return errors.New("no k3s cluster is running")
+		kubeconfig, err := dtest.GetKubeconfig()
+		if err != nil {
+			return errors.Wrap(err, "no k3s cluster is running")
 		}
 
 		if *output == "" {
@@ -100,7 +102,7 @@ func main() {
 			return nil
 		}
 
-		err := ioutil.WriteFile(*output, []byte(kubeconfig), 0644)
+		err = ioutil.WriteFile(*output, []byte(kubeconfig), 0644)
 		if err == io.EOF {
 			err = nil
 		}

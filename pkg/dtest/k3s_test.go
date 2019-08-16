@@ -16,13 +16,22 @@ func TestMain(m *testing.M) {
 }
 
 func TestContainer(t *testing.T) {
-	id := dockerUp("dtest-test-tag", "nginx")
+	id, err := dockerUp("dtest-test-tag", "nginx")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	running := dockerPs()
+	running, err := dockerPs()
+	if err != nil {
+		t.Fatal(err)
+	}
 	assert.Contains(t, running, id)
 
 	dockerKill(id)
 
-	running = dockerPs()
+	running, err = dockerPs()
+	if err != nil {
+		t.Fatal(err)
+	}
 	assert.NotContains(t, running, id)
 }

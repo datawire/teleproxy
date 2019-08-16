@@ -5,10 +5,11 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
@@ -29,63 +30,62 @@ func lines(str string) []string {
 	return result
 }
 
-func dockerPs(args ...string) []string {
+func dockerPs(args ...string) ([]string, error) {
 	cmdline := append([]string{"docker", "ps", "--quiet", "--filter=label=scope=" + scope}, args...)
 	cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
-	return lines(cmd.MustCapture(nil))
+	output, err := cmd.Capture(nil)
+	if err != nil {
+		return nil, err
+	}
+	return lines(output), nil
 }
 
-func tag2id(tag string) string {
-	result := dockerPs("-f", fmt.Sprintf("label=%s", tag))
-	switch len(result) {
+var errorNoContainer = errors.New("no container")
+
+func tag2id(tag string) (string, error) {
+	ids, err := dockerPs("--filter=label=" + tag)
+	if err != nil {
+		return "", err
+	}
+	switch len(ids) {
 	case 0:
-		return ""
+		return "", errorNoContainer
 	case 1:
-		return result[0]
+		return ids[0], nil
 	default:
-		panic(fmt.Sprintf("expecting zero or one containers with label scope=%s and label %s", scope, tag))
+		return "", errors.Errorf("expected 0 or 1 containers with label %q and label %q, got %d", "scope="+scope, tag, len(ids))
 	}
 }
 
-func dockerUp(tag string, args ...string) string {
+func dockerUp(tag string, args ...string) (string, error) {
 	var id string
+	var err error
 
 	WithNamedMachineLock("docker", func() {
-		id = tag2id(tag)
-
-		if id == "" {
+		id, err = tag2id(tag)
+		if err == errorNoContainer {
 			cmdline := append([]string{"docker", "run", "--detach", "--label=scope=" + scope, "--label=" + tag, "--rm"}, args...)
 			cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
-			out := cmd.MustCapture(nil)
-			id = strings.TrimSpace(out)[:12]
+			var out string
+			out, _err := cmd.Capture(nil)
+			if _err != nil {
+				err = _err
+				return
+			}
+			id = strings.TrimSpace(out)[:12] // XXX: what if 'out' isn't 12 bytes long?
+			err = nil
 		}
 	})
 
-	return id
+	return id, err
 }
 
 func dockerKill(ids ...string) {
 	if len(ids) > 0 {
 		cmdline := append([]string{"docker", "kill", "--"}, ids...)
 		cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
-		cmd.MustCapture(nil)
+		_, _ = cmd.Capture(nil)
 	}
-}
-
-func isKubeconfigReady() bool {
-	id := tag2id("k3s")
-
-	if id == "" {
-		return false
-	}
-
-	cmd := supervisor.Command(prefix, "docker", "exec", "--interactive", "--", id, "test", "-e", "/etc/rancher/k3s/k3s.yaml")
-	err := cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-	_ = cmd.Wait()
-	return cmd.ProcessState.ExitCode() == 0
 }
 
 var requiredResources = []string{
@@ -151,9 +151,8 @@ var requiredResources = []string{
 }
 
 func isK3sReady() bool {
-	kubeconfig := getKubeconfigPath()
-
-	if kubeconfig == "" {
+	kubeconfig, err := getKubeconfigPath()
+	if err != nil {
 		return false
 	}
 
@@ -162,6 +161,7 @@ func isK3sReady() bool {
 	if err != nil {
 		return false
 	}
+
 	resources := make(map[string]bool)
 	for _, line := range strings.Split(output, "\n") {
 		resources[strings.TrimSpace(line)] = true
@@ -188,45 +188,38 @@ const k3sConfigPath = "/etc/rancher/k3s/k3s.yaml"
 // GetKubeconfig returns the kubeconfig contents for the running k3s
 // cluster as a string. It will return the empty string if no cluster
 // is running.
-func GetKubeconfig() string {
-	if !isKubeconfigReady() {
-		return ""
-	}
-
-	id := tag2id("k3s")
-
-	if id == "" {
-		return ""
+func GetKubeconfig() (string, error) {
+	id, err := tag2id("k3s")
+	if err != nil {
+		return "", err
 	}
 
 	cmd := supervisor.Command(prefix, "docker", "exec", "--interactive", "--", id, "cat", "--", k3sConfigPath)
-	kubeconfig := cmd.MustCapture(nil)
+	kubeconfig, err := cmd.Capture(nil)
+	if err != nil {
+		return "", err
+	}
 	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", net.JoinHostPort(dockerIP(), k3sPort))
-	return kubeconfig
+	return kubeconfig, nil
 }
 
-func getKubeconfigPath() string {
-	id := tag2id("k3s")
-
-	if id == "" {
-		return ""
-	}
-
-	user, err := user.Current()
+func getKubeconfigPath() (string, error) {
+	id, err := tag2id("k3s")
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	kubeconfig := filepath.Join(os.TempDir(), fmt.Sprintf("dtest-kubeconfig-%s-%s.yaml", user.Username, id))
-	contents := GetKubeconfig()
-
-	err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644)
-
+	kubeconfig := filepath.Join(os.TempDir(), fmt.Sprintf("dtest-kubeconfig-%d-%s.yaml", os.Getuid(), id))
+	contents, err := GetKubeconfig()
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
-	return kubeconfig
+	if err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644); err != nil {
+		return "", err
+	}
+
+	return kubeconfig, nil
 }
 
 const dtestRegistry = "DTEST_REGISTRY"
@@ -234,7 +227,7 @@ const registryPort = "5000"
 
 // RegistryUp will launch if necessary and return the docker id of a
 // container running a docker registry.
-func RegistryUp() string {
+func RegistryUp() (string, error) {
 	return dockerUp("registry",
 		"--publish="+k3sPort+":6443",
 		"--publish="+registryPort+":"+registryPort,
@@ -271,25 +264,22 @@ kubeconfig does not exist: %s
 `
 
 // Kubeconfig returns a path referencing a kubeconfig file suitable for use in tests.
-func Kubeconfig() string {
+func Kubeconfig() (string, error) {
 	kubeconfig := os.Getenv(dtestKubeconfig)
 	if kubeconfig != "" {
 		if _, err := os.Stat(kubeconfig); os.IsNotExist(err) {
-			fmt.Printf(k3sMsg, kubeconfig)
-			os.Exit(1)
+			return "", err
 		}
 
-		return kubeconfig
+		return kubeconfig, nil
 	}
 
-	K3sUp()
+	if _, _, err := K3sUp(); err != nil {
+		return "", err
+	}
 
-	for {
-		if isK3sReady() {
-			break
-		} else {
-			time.Sleep(time.Second)
-		}
+	for !isK3sReady() {
+		time.Sleep(time.Second)
 	}
 
 	return getKubeconfigPath()
@@ -297,18 +287,25 @@ func Kubeconfig() string {
 
 // K3sUp will launch if necessary and return the docker id of a
 // container running a k3s cluster.
-func K3sUp() string {
-	regid := RegistryUp()
-	return dockerUp("k3s",
+func K3sUp() (regid, k3sid string, err error) {
+	regid, err = RegistryUp()
+	if err != nil {
+		return "", "", err
+	}
+	k3sid, err = dockerUp("k3s",
 		"--privileged", "--network=container:"+regid,
 		"--",
 		k3sImage,
 		"server", "--node-name=localhost", "--no-deploy=traefik")
+	if err != nil {
+		return "", "", err
+	}
+	return regid, k3sid, nil
 }
 
 // K3sDown shuts down the k3s cluster.
 func K3sDown() string {
-	id := tag2id("k3s")
+	id, _ := tag2id("k3s")
 	if id != "" {
 		dockerKill(id)
 	}
@@ -317,7 +314,7 @@ func K3sDown() string {
 
 // RegistryDown shutsdown the test registry.
 func RegistryDown() string {
-	id := tag2id("registry")
+	id, _ := tag2id("registry")
 	if id != "" {
 		dockerKill(id)
 	}

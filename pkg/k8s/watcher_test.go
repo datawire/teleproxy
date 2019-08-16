@@ -38,7 +38,11 @@ func fetch(w *k8s.Watcher, resource, qname string) (result k8s.Resource) {
 }
 
 func info() *k8s.KubeInfo {
-	return k8s.NewKubeInfo(dtest.Kubeconfig(), "", "")
+	kubeconfig, err := dtest.Kubeconfig()
+	if err != nil {
+		panic(err)
+	}
+	return k8s.NewKubeInfo(kubeconfig, "", "")
 }
 
 func TestUpdateStatus(t *testing.T) {
