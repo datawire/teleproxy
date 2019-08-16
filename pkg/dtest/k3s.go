@@ -30,8 +30,8 @@ func lines(str string) []string {
 }
 
 func dockerPs(args ...string) []string {
-	cmd := supervisor.Command(prefix, "docker", append([]string{"ps", "-q", "-f", fmt.Sprintf("label=scope=%s", scope)},
-		args...)...)
+	cmdline := append([]string{"docker", "ps", "--quiet", "--filter=label=scope=" + scope}, args...)
+	cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
 	return lines(cmd.MustCapture(nil))
 }
 
@@ -54,8 +54,8 @@ func dockerUp(tag string, args ...string) string {
 		id = tag2id(tag)
 
 		if id == "" {
-			cmd := supervisor.Command(prefix, "docker", append([]string{"run", "-d", "-l",
-				fmt.Sprintf("scope=%s", scope), "-l", tag, "--rm"}, args...)...)
+			cmdline := append([]string{"docker", "run", "--detach", "--label=scope=" + scope, "--label=" + tag, "--rm"}, args...)
+			cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
 			out := cmd.MustCapture(nil)
 			id = strings.TrimSpace(out)[:12]
 		}
@@ -66,7 +66,8 @@ func dockerUp(tag string, args ...string) string {
 
 func dockerKill(ids ...string) {
 	if len(ids) > 0 {
-		cmd := supervisor.Command(prefix, "docker", append([]string{"kill"}, ids...)...)
+		cmdline := append([]string{"docker", "kill", "--"}, ids...)
+		cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
 		cmd.MustCapture(nil)
 	}
 }
@@ -78,7 +79,7 @@ func isKubeconfigReady() bool {
 		return false
 	}
 
-	cmd := supervisor.Command(prefix, "docker", "exec", "-i", id, "test", "-e", "/etc/rancher/k3s/k3s.yaml")
+	cmd := supervisor.Command(prefix, "docker", "exec", "--interactive", "--", id, "test", "-e", "/etc/rancher/k3s/k3s.yaml")
 	err := cmd.Start()
 	if err != nil {
 		panic(err)
@@ -156,7 +157,7 @@ func isK3sReady() bool {
 		return false
 	}
 
-	cmd := supervisor.Command(prefix, "kubectl", "--kubeconfig", kubeconfig, "api-resources", "-o", "name")
+	cmd := supervisor.Command(prefix, "kubectl", "--kubeconfig="+kubeconfig, "api-resources", "--output=name")
 	output, err := cmd.Capture(nil)
 	if err != nil {
 		return false
@@ -198,7 +199,7 @@ func GetKubeconfig() string {
 		return ""
 	}
 
-	cmd := supervisor.Command(prefix, "docker", "exec", "-i", id, "cat", k3sConfigPath)
+	cmd := supervisor.Command(prefix, "docker", "exec", "--interactive", "--", id, "cat", "--", k3sConfigPath)
 	kubeconfig := cmd.MustCapture(nil)
 	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", net.JoinHostPort(dockerIP(), k3sPort))
 	return kubeconfig
@@ -235,9 +236,10 @@ const registryPort = "5000"
 // container running a docker registry.
 func RegistryUp() string {
 	return dockerUp("registry",
-		"-p", fmt.Sprintf("%s:6443", k3sPort),
-		"-p", fmt.Sprintf("%s:%s", registryPort, registryPort),
-		"-e", fmt.Sprintf("REGISTRY_HTTP_ADDR=0.0.0.0:%s", registryPort),
+		"--publish="+k3sPort+":6443",
+		"--publish="+registryPort+":"+registryPort,
+		"--env=REGISTRY_HTTP_ADDR=0.0.0.0:"+registryPort,
+		"--",
 		"registry:2")
 }
 
@@ -297,8 +299,11 @@ func Kubeconfig() string {
 // container running a k3s cluster.
 func K3sUp() string {
 	regid := RegistryUp()
-	return dockerUp("k3s", "--privileged", "--network", fmt.Sprintf("container:%s", regid),
-		k3sImage, "server", "--node-name", "localhost", "--no-deploy", "traefik")
+	return dockerUp("k3s",
+		"--privileged", "--network=container:"+regid,
+		"--",
+		k3sImage,
+		"server", "--node-name=localhost", "--no-deploy=traefik")
 }
 
 // K3sDown shuts down the k3s cluster.
