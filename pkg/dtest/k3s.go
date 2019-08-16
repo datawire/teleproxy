@@ -162,9 +162,9 @@ func isK3sReady() bool {
 		return false
 	}
 
-	resources := make(map[string]bool)
+	resources := make(map[string]struct{})
 	for _, line := range strings.Split(output, "\n") {
-		resources[strings.TrimSpace(line)] = true
+		resources[strings.TrimSpace(line)] = struct{}{}
 	}
 
 	for _, req := range requiredResources {
