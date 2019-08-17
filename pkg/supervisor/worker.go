@@ -3,6 +3,8 @@ package supervisor
 import (
 	"fmt"
 	"time"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // A Worker represents a managed goroutine being prepared or run.
@@ -80,7 +82,7 @@ func (w *Worker) reconcile() bool {
 					return false
 				}
 			}
-			s.Logger.Printf("%s: signaling shutdown", w.Name)
+			dlog.GetLogger(w.process.Context()).Printf("signalling shutdown")
 			close(w.process.shutdown)
 			w.process.shutdownClosed = true
 		}
@@ -109,7 +111,7 @@ func (w *Worker) reconcile() bool {
 					return false
 				}
 			}
-			s.Logger.Printf("%s: starting", w.Name)
+			dlog.GetLogger(s.context).Printf("%s: starting", w.Name)
 			s.launch(w)
 		}
 
@@ -119,13 +121,18 @@ func (w *Worker) reconcile() bool {
 
 func (w *Worker) maybeWarnBlocked(name, cond string) {
 	now := time.Now()
-	if w.lastBlockedWarning == (time.Time{}) {
+	if w.lastBlockedWarning.IsZero() {
 		w.lastBlockedWarning = now
 		return
 	}
-
 	if now.Sub(w.lastBlockedWarning) > 3*time.Second {
-		w.supervisor.Logger.Printf("%s: blocked on %s (%s)", w.Name, name, cond)
+		var log dlog.Logger
+		if w.process != nil {
+			log = dlog.GetLogger(w.process.Context())
+		} else {
+			log = dlog.GetLogger(w.supervisor.context).WithField("worker", w.Name)
+		}
+		log.Printf("blocked on %s (%s)", name, cond)
 		w.lastBlockedWarning = now
 	}
 }

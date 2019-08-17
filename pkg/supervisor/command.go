@@ -1,10 +1,11 @@
 package supervisor
 
 import (
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 type logger struct {
@@ -13,15 +14,16 @@ type logger struct {
 }
 
 func (l *logger) Log(prefix, line string) {
+	logger := dlog.GetLogger(l.process.Context())
 	if l.emptyLine {
-		l.process.Log(prefix)
+		logger.Print(prefix)
 		l.emptyLine = false
 	}
 
 	if line == "" {
 		l.emptyLine = true
 	} else {
-		l.process.Logf("%s%s", prefix, line)
+		logger.Printf("%s%s", prefix, line)
 		l.emptyLine = false
 	}
 }
@@ -38,7 +40,7 @@ func (l *logger) LogLines(prefix, str string, err error) {
 	}
 
 	if !(err == nil || err == io.EOF) {
-		l.process.Log(fmt.Sprintf("%v", err))
+		dlog.GetLogger(l.process.Context()).Printf("%v", err)
 	}
 }
 
@@ -82,17 +84,18 @@ func (c *Cmd) pre() {
 	c.Stdout = &loggingWriter{logger: logger{process: c.supervisorProcess}, writer: c.Stdout}
 	c.Stderr = &loggingWriter{logger: logger{process: c.supervisorProcess}, writer: c.Stderr}
 
-	c.supervisorProcess.Logf("%s %v", c.Path, c.Args[1:])
+	dlog.GetLogger(c.supervisorProcess.Context()).Printf("%s %v", c.Path, c.Args[1:])
 }
 
 func (c *Cmd) post(err error) {
+	logger := dlog.GetLogger(c.supervisorProcess.Context())
 	if err == nil {
-		c.supervisorProcess.Logf("%s exited successfully", c.Path)
+		logger.Printf("%s exited successfully", c.Path)
 	} else {
 		if c.ProcessState == nil {
-			c.supervisorProcess.Logf("%v", err)
+			logger.Printf("%v", err)
 		} else {
-			c.supervisorProcess.Logf("%s: %v", c.Path, err)
+			logger.Printf("%s: %v", c.Path, err)
 		}
 	}
 }

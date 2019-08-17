@@ -7,12 +7,15 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // A Process represents a goroutine being run from a Worker.
 type Process struct {
 	supervisor *Supervisor
 	worker     *Worker
+	context    context.Context
 	// Used to signal graceful shutdown.
 	shutdown       chan struct{}
 	ready          bool
@@ -31,7 +34,7 @@ func (p *Process) Worker() *Worker {
 
 // Context returns the Process' context.
 func (p *Process) Context() context.Context {
-	return p.supervisor.context
+	return p.context
 }
 
 // Ready is called by the Process' Worker to notify the supervisor
@@ -47,14 +50,14 @@ func (p *Process) Shutdown() <-chan struct{} {
 	return p.shutdown
 }
 
-// Log is used for logging...
+// Log is a backwards-compatibility shim.
 func (p *Process) Log(obj interface{}) {
-	p.supervisor.Logger.Printf("%s: %v", p.Worker().Name, obj)
+	dlog.GetLogger(p.Context()).Printf("%v", obj)
 }
 
-// Logf is used for logging...
+// Logf is a backwards-compatibility shim.
 func (p *Process) Logf(format string, args ...interface{}) {
-	p.supervisor.Logger.Printf("%s: %v", p.Worker().Name, fmt.Sprintf(format, args...))
+	dlog.GetLogger(p.Context()).Printf(format, args...)
 }
 
 func (p *Process) allocateID() int64 {

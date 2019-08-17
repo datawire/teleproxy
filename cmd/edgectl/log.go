@@ -10,7 +10,7 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // DaemonFormatter formats log messages for the Edge Control Daemon
@@ -45,7 +45,7 @@ func (f *DaemonFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 }
 
 // SetUpLogging sets up standard Edge Control Daemon logging
-func SetUpLogging() supervisor.Logger {
+func SetUpLogging() dlog.Logger {
 	loggingToTerminal := terminal.IsTerminal(int(os.Stdout.Fd()))
 	logger := logrus.StandardLogger()
 	formatter := new(DaemonFormatter)
@@ -62,5 +62,5 @@ func SetUpLogging() supervisor.Logger {
 			LocalTime:  true, // rotated logfiles use local time names
 		})
 	}
-	return logger
+	return dlog.WrapLogrus(logger)
 }

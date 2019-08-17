@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // A supervisor provides an abstraction for managing a group of
@@ -17,7 +19,6 @@ import (
 // - both graceful and hard shutdown
 // - error propagation
 // - retry
-// - logging
 //
 type Supervisor struct {
 	mutex         *sync.Mutex
@@ -27,7 +28,6 @@ type Supervisor struct {
 	names         []string           // list of worker names in order added
 	workers       map[string]*Worker // keyed by worker name
 	errors        []error
-	Logger        Logger
 }
 
 // centralize a bit of lock management
@@ -45,7 +45,6 @@ func WithContext(ctx context.Context) *Supervisor {
 		changed: sync.NewCond(mu),
 		context: ctx,
 		workers: make(map[string]*Worker),
-		Logger:  &DefaultLogger{},
 	}
 }
 
@@ -183,6 +182,7 @@ func (s *Supervisor) launch(worker *Worker) {
 	process := &Process{
 		supervisor: s,
 		worker:     worker,
+		context:    dlog.WithLoggerField(s.context, "worker", worker.Name),
 		shutdown:   make(chan struct{}),
 	}
 	worker.process = process
@@ -201,15 +201,16 @@ func (s *Supervisor) launch(worker *Worker) {
 		s.mutex.Lock()
 		defer s.mutex.Unlock()
 		worker.process = nil
+		log := dlog.GetLogger(process.Context())
 		if err != nil {
-			process.Logf("ERROR: %v", err)
+			log.Errorln(err)
 			if worker.Retry {
 				if worker.shuttingDown() {
 					s.remove(worker)
 					worker.done = true
 				} else {
 					worker.retryDelay = nextDelay(worker.retryDelay)
-					process.Logf("retrying after %s...", worker.retryDelay.String())
+					log.Printf("retrying after %s...", worker.retryDelay.String())
 				}
 			} else {
 				s.remove(worker)
@@ -219,7 +220,7 @@ func (s *Supervisor) launch(worker *Worker) {
 				worker.done = true
 			}
 		} else {
-			process.Logf("exited")
+			log.Printf("exited")
 			s.remove(worker)
 			worker.done = true
 		}

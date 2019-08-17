@@ -5,23 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"time"
-
-	"github.com/datawire/teleproxy/pkg/dlog"
 )
-
-// Logger is what Supervisor may use as a logging backend.
-type Logger interface {
-	Printf(format string, v ...interface{})
-}
-
-// DefaultLogger is a logger that uses the stdlib "log" package
-// default logger.
-type DefaultLogger struct{}
-
-// Printf implements the Logger interface.
-func (d *DefaultLogger) Printf(format string, v ...interface{}) {
-	dlog.GetLogger(context.TODO()).Printf(format, v...)
-}
 
 // Run creates a single-purpose Supervisor and runs a worker function
 // with it.
