@@ -596,7 +596,8 @@ func TestWaitOnWorkerStartedAfterShutdown(t *testing.T) {
 
 func TestDoPanic(t *testing.T) {
 	gotHere := false
-	errs := Run("bob", func(p *Process) error {
+	s := WithContext(testContext(t))
+	s.Supervise(&Worker{Name: "bob", Work: func(p *Process) error {
 		p.Do(func() error {
 			if true {
 				panic("blah")
@@ -605,7 +606,8 @@ func TestDoPanic(t *testing.T) {
 		})
 		gotHere = true
 		return nil
-	})
+	}})
+	errs := s.Run()
 	if len(errs) != 1 {
 		t.Errorf("unexpected errors: %v", errs)
 	}
@@ -615,7 +617,8 @@ func TestDoPanic(t *testing.T) {
 }
 
 func TestRestart(t *testing.T) {
-	MustRun("sysiphus", func(p *Process) error {
+	s := WithContext(testContext(t))
+	s.Supervise(&Worker{Name: "sysiphus", Work: func(p *Process) error {
 		pipe := make(chan bool)
 		w := &Worker{
 			Name: "bob",
@@ -639,5 +642,9 @@ func TestRestart(t *testing.T) {
 		w.Wait()
 
 		return nil
-	})
+	}})
+	errs := s.Run()
+	if len(errs) != 1 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
 }

@@ -1,27 +1,10 @@
 package supervisor
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"time"
 )
-
-// Run creates a single-purpose Supervisor and runs a worker function
-// with it.
-func Run(name string, f func(*Process) error) []error {
-	sup := WithContext(context.Background())
-	sup.Supervise(&Worker{Name: name, Work: f})
-	return sup.Run()
-}
-
-// MustRun is like Run, but panics if there are errors.
-func MustRun(name string, f func(*Process) error) {
-	errs := Run(name, f)
-	if len(errs) > 0 {
-		panic(fmt.Sprintf("%s: %v", name, errs))
-	}
-}
 
 func nextDelay(delay time.Duration) time.Duration {
 	switch {

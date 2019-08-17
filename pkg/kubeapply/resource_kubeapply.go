@@ -105,7 +105,8 @@ func builder(dir string) func(string) (string, error) {
 
 func image(dir, dockerfile string) (string, error) {
 	var result string
-	errs := supervisor.Run("BLD", func(p *supervisor.Process) error {
+	sup := supervisor.WithContext(context.TODO())
+	sup.Supervise(&supervisor.Worker{Name: "BLD", Work: func(p *supervisor.Process) error {
 		iidfile, err := ioutil.TempFile("", "iid")
 		if err != nil {
 			return err
@@ -146,7 +147,8 @@ func image(dir, dockerfile string) (string, error) {
 
 		cmd = logexec.CommandContext(p.Context(), "docker", "push", tag)
 		return cmd.Run()
-	})
+	}})
+	errs := sup.Run()
 	if len(errs) > 0 {
 		return "", errors.Errorf("errors building %s: %v", dockerfile, errs)
 	}
@@ -182,6 +184,7 @@ func ExpandResource(path string) (result []byte, err error) {
 
 	return
 }
+
 
 // LoadResources is like ExpandResource, but follows it up by actually
 // parsing the YAML.

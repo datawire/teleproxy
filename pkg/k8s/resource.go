@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"text/template"
+	"context"
 
 	ms "github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v2"

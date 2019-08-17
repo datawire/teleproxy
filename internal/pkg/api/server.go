@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/datawire/teleproxy/internal/pkg/dns"
 	"github.com/datawire/teleproxy/internal/pkg/interceptor"
@@ -76,6 +77,9 @@ func NewAPIServer(iceptor *interceptor.Interceptor) (*APIServer, error) {
 		w.Write([]byte("Goodbye!\n"))
 		p, err := os.FindProcess(os.Getpid())
 		if err != nil {
+			// os.FindProcess never fails on Unix systems.
+			// I guess we might be in for some trouble if
+			// we ever port to Windows?
 			panic(err)
 		}
 		p.Signal(os.Interrupt)
@@ -95,11 +99,7 @@ func NewAPIServer(iceptor *interceptor.Interceptor) (*APIServer, error) {
 }
 
 func (a *APIServer) Port() string {
-	_, port, err := net.SplitHostPort(a.listener.Addr().String())
-	if err != nil {
-		panic(err)
-	}
-	return port
+	return strconv.Itoa(a.listener.Addr().(*net.TCPAddr).Port)
 }
 
 func (a *APIServer) Start() {

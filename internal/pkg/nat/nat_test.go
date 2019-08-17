@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/dlog"
+	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -204,8 +204,13 @@ func TestTranslator(t *testing.T) {
 
 }
 
+func testContext(t *testing.T) context.Context {
+	return dlog.WithLogger(context.Background(), dlog.WrapTB(t))
+}
+
 func TestSorted(t *testing.T) {
-	supervisor.MustRun("sorted", func(p *supervisor.Process) error {
+	sup := supervisor.WithContext(testContext(t))
+	sup.Supervise(&supervisor.Worker{Name: "sorted", Work: func(p *supervisor.Process) error {
 		tr := NewTranslator("test-table")
 		defer tr.Disable(p)
 		tr.ForwardTCP(p, "192.0.2.1", "", "4321")
@@ -223,5 +228,9 @@ func TestSorted(t *testing.T) {
 		}
 
 		return nil
-	})
+	}})
+	errs := sup.Run()
+	if len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
 }
