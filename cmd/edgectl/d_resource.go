@@ -8,6 +8,8 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
+	"github.com/datawire/teleproxy/pkg/logexec"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -71,12 +73,13 @@ func (rb *ResourceBase) setup(sup *supervisor.Supervisor, name string) {
 	sup.Supervise(&supervisor.Worker{
 		Name: name + "/shutdown",
 		Work: func(p *supervisor.Process) error {
+			log := dlog.GetLogger(p.Context())
 			select {
 			case <-p.Shutdown():
-				p.Log("daemon is shutting down")
+				log.Print("daemon is shutting down")
 				return rb.Close()
 			case <-rb.end:
-				p.Log("Close() complete")
+				log.Print("Close() complete")
 				return nil
 			}
 		},
@@ -84,18 +87,19 @@ func (rb *ResourceBase) setup(sup *supervisor.Supervisor, name string) {
 }
 
 func (rb *ResourceBase) quit(p *supervisor.Process) error {
-	p.Log("Close() / resource quit() called")
+	dlog.GetLogger(p.Context()).Print("Close() / resource quit() called")
 	return rb.doQuit(p)
 }
 
 func (rb *ResourceBase) monitor(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	old := rb.okay
-	p.Log("monitor: checking...")
+	log.Print("monitor: checking...")
 	if err := rb.doCheck(p); err != nil {
 		rb.okay = false // Check failed is not okay
-		p.Logf("monitor: check failed: %v", err)
+		log.Printf("monitor: check failed: %v", err)
 	} else {
-		p.Log("monitor: check passed")
+		log.Print("monitor: check passed")
 		rb.okay = true
 	}
 	MaybeNotify(p, rb.name, old, rb.okay)
@@ -103,6 +107,7 @@ func (rb *ResourceBase) monitor(p *supervisor.Process) error {
 }
 
 func (rb *ResourceBase) processor(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	ticker := time.NewTicker(3 * time.Second)
 	defer ticker.Stop()
 	defer close(rb.end)
@@ -116,11 +121,11 @@ func (rb *ResourceBase) processor(p *supervisor.Process) error {
 			task = rb.monitor
 		}
 		if err := task(p); err != nil {
-			p.Logf("task failed: %v", err)
+			log.Printf("task failed: %v", err)
 			return err
 		}
 		if rb.done {
-			p.Log("done")
+			log.Print("done")
 			return nil
 		}
 	}
@@ -153,8 +158,8 @@ func (c *KCluster) GetKubectlArgs(args ...string) []string {
 
 // GetKubectlCmd returns a Cmd that runs kubectl with the given arguments and
 // the appropriate environment to talk to the cluster
-func (c *KCluster) GetKubectlCmd(p *supervisor.Process, args ...string) *supervisor.Cmd {
-	return c.rai.Command(p, c.GetKubectlArgs(args...)...)
+func (c *KCluster) GetKubectlCmd(p *supervisor.Process, args ...string) *logexec.Cmd {
+	return c.rai.Command(p.Context(), c.GetKubectlArgs(args...)...)
 }
 
 // Context returns the cluster's context name
@@ -221,8 +226,8 @@ type crCmd struct {
 	rai        *RunAsInfo
 	check      func(p *supervisor.Process) error
 	startGrace time.Duration
-	cmd        *supervisor.Cmd // (run loop) tracks the cmd for killing it
-	quitting   bool            // (run loop) enables Close()
+	cmd        *logexec.Cmd // (run loop) tracks the cmd for killing it
+	quitting   bool         // (run loop) enables Close()
 	startedAt  time.Time
 	ResourceBase
 }
@@ -253,10 +258,11 @@ func CheckedRetryingCommand(
 }
 
 func (crc *crCmd) subprocessEnded(p *supervisor.Process) error {
-	p.Log("end: subprocess ended")
+	log := dlog.GetLogger(p.Context())
+	log.Print("end: subprocess ended")
 	crc.cmd = nil
 	if crc.quitting {
-		p.Log("end: marking as done")
+		log.Print("end: marking as done")
 		crc.done = true
 	}
 	return nil
@@ -266,20 +272,22 @@ func (crc *crCmd) launch(p *supervisor.Process) error {
 	if crc.cmd != nil {
 		panic(fmt.Errorf("launching %s: already launched", crc.name))
 	}
+	log := dlog.GetLogger(p.Context())
 
 	// Launch the subprocess (set up logging using a worker)
-	p.Logf("Launching %s...", crc.name)
+	log.Printf("Launching %s...", crc.name)
 	launchErr := make(chan error)
 	p.Supervisor().Supervise(&supervisor.Worker{
 		Name: crc.name + "/out",
 		Work: func(p *supervisor.Process) error {
-			crc.cmd = crc.rai.Command(p, crc.args...)
+			log := dlog.GetLogger(p.Context())
+			crc.cmd = crc.rai.Command(p.Context(), crc.args...)
 			launchErr <- crc.cmd.Start()
 			// Wait for the subprocess to end. Another worker will
 			// call kill() on shutdown (via quit()) so we don't need
 			// to worry about supervisor shutdown ourselves.
 			if err := crc.cmd.Wait(); err != nil {
-				p.Log(err)
+				log.Print(err)
 			}
 			crc.tasks <- crc.subprocessEnded
 			return nil
@@ -296,19 +304,20 @@ func (crc *crCmd) launch(p *supervisor.Process) error {
 		return nil
 	}
 	crc.startedAt = time.Now()
-	p.Logf("Launched %s", crc.name)
+	log.Printf("Launched %s", crc.name)
 
 	return nil
 }
 
 func (crc *crCmd) kill(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	if crc.cmd != nil {
-		p.Log("kill: sending signal")
+		log.Print("kill: sending signal")
 		if err := crc.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-			p.Logf("kill: failed (ignoring): %v", err)
+			log.Printf("kill: failed (ignoring): %v", err)
 		}
 	} else {
-		p.Log("kill: no subprocess to kill")
+		log.Print("kill: no subprocess to kill")
 	}
 	return nil
 }
@@ -320,28 +329,29 @@ func (crc *crCmd) doQuit(p *supervisor.Process) error {
 
 // doCheck determines whether the subprocess is running and healthy
 func (crc *crCmd) doCheck(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	if crc.cmd == nil {
 		if crc.quitting {
-			p.Log("check: no subprocess + quitting -> done")
+			log.Print("check: no subprocess + quitting -> done")
 			crc.done = true
 			return nil
 		}
-		p.Log("check: no subprocess -> launch")
+		log.Print("check: no subprocess -> launch")
 		crc.tasks <- crc.launch
 		return errors.New("not running")
 	}
 	if err := crc.check(p); err != nil {
-		p.Logf("check: failed: %v", err)
+		log.Printf("check: failed: %v", err)
 		runTime := time.Since(crc.startedAt)
 		if runTime > crc.startGrace {
 			// Kill the process because it's in a bad state
-			p.Log("check: killing...")
+			log.Print("check: killing...")
 			_ = crc.kill(p)
 		} else {
-			p.Logf("check: not killing yet (%v < %v)", runTime, crc.startGrace)
+			log.Printf("check: not killing yet (%v < %v)", runTime, crc.startGrace)
 		}
 		return err // from crc.check() above
 	}
-	p.Log("check: passed")
+	log.Print("check: passed")
 	return nil
 }

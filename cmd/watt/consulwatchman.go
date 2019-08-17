@@ -2,12 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"os"
 
 	consulapi "github.com/hashicorp/consul/api"
 
 	"github.com/datawire/teleproxy/pkg/consulwatch"
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -42,9 +41,10 @@ func (m *ConsulWatchMaker) MakeConsulWatch(spec ConsulWatchSpec) (*supervisor.Wo
 	worker := &supervisor.Worker{
 		Name: fmt.Sprintf("consul:%s", spec.WatchId()),
 		Work: func(p *supervisor.Process) error {
-			w, err := consulwatch.New(consul, log.New(os.Stdout, "", log.LstdFlags), spec.Datacenter, spec.ServiceName, true)
+			log := dlog.GetLogger(p.Context())
+			w, err := consulwatch.New(consul, log.StdLogger(dlog.LogLevelInfo), spec.Datacenter, spec.ServiceName, true)
 			if err != nil {
-				p.Logf("failed to setup new consul watch %v", err)
+				log.Printf("failed to setup new consul watch %v", err)
 				return err
 			}
 
@@ -55,7 +55,7 @@ func (m *ConsulWatchMaker) MakeConsulWatch(spec ConsulWatchSpec) (*supervisor.Wo
 			_ = p.Go(func(p *supervisor.Process) error {
 				x := w.Start()
 				if x != nil {
-					p.Logf("failed to start service watcher %v", x)
+					log.Printf("failed to start service watcher %v", x)
 					return x
 				}
 
@@ -74,22 +74,23 @@ func (m *ConsulWatchMaker) MakeConsulWatch(spec ConsulWatchSpec) (*supervisor.Wo
 
 func (w *consulwatchman) Work(p *supervisor.Process) error {
 	p.Ready()
+	log := dlog.GetLogger(p.Context())
 	for {
 		select {
 		case watches := <-w.watchesCh:
 			found := make(map[string]*supervisor.Worker)
-			p.Logf("processing %d consul watches", len(watches))
+			log.Printf("processing %d consul watches", len(watches))
 			for _, cw := range watches {
 				worker, err := w.WatchMaker.MakeConsulWatch(cw)
 				if err != nil {
-					p.Logf("failed to create consul watch %v", err)
+					log.Printf("failed to create consul watch %v", err)
 					continue
 				}
 
 				if _, exists := w.watched[worker.Name]; exists {
 					found[worker.Name] = w.watched[worker.Name]
 				} else {
-					p.Logf("add consul watcher %s\n", worker.Name)
+					log.Printf("add consul watcher %s\n", worker.Name)
 					p.Supervisor().Supervise(worker)
 					w.watched[worker.Name] = worker
 					found[worker.Name] = worker
@@ -100,7 +101,7 @@ func (w *consulwatchman) Work(p *supervisor.Process) error {
 			// report
 			for workerName, worker := range w.watched {
 				if _, exists := found[workerName]; !exists {
-					p.Logf("remove consul watcher %s\n", workerName)
+					log.Printf("remove consul watcher %s\n", workerName)
 					worker.Shutdown()
 					worker.Wait()
 				}
@@ -108,7 +109,7 @@ func (w *consulwatchman) Work(p *supervisor.Process) error {
 
 			w.watched = found
 		case <-p.Shutdown():
-			p.Logf("shutdown initiated")
+			log.Printf("shutdown initiated")
 			return nil
 		}
 	}

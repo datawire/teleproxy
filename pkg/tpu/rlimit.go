@@ -4,7 +4,7 @@ import (
 	"context"
 	"syscall"
 
-	"github/datawire/teleproxy/pkg/dlog"
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 func Rlimit(ctx context.Context) {

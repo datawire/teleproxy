@@ -11,6 +11,7 @@ import (
 
 	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // Daemon represents the state of the Edge Control Daemon
@@ -104,26 +105,27 @@ func (d *Daemon) acceptLoop(p *supervisor.Process) error {
 
 func (d *Daemon) handle(p *supervisor.Process, conn net.Conn) error {
 	defer conn.Close()
+	log := dlog.GetLogger(p.Context())
 
 	decoder := json.NewDecoder(conn)
 	data := &ClientMessage{}
 	if err := decoder.Decode(data); err != nil {
-		p.Logf("Failed to read message: %v", err)
+		log.Printf("Failed to read message: %v", err)
 		fmt.Fprintln(conn, "API mismatch. Server", displayVersion)
 		return nil
 	}
 	if data.APIVersion != apiVersion {
-		p.Logf("API version mismatch (got %d, need %d)", data.APIVersion, apiVersion)
+		log.Printf("API version mismatch (got %d, need %d)", data.APIVersion, apiVersion)
 		fmt.Fprintf(conn, "API version mismatch (got %d, server %s)", data.APIVersion, displayVersion)
 		return nil
 	}
-	p.Logf("Received command: %q", data.Args)
+	log.Printf("Received command: %q", data.Args)
 
 	err := d.handleCommand(p, conn, data)
 	if err != nil {
-		p.Logf("Command processing failed: %v", err)
+		log.Printf("Command processing failed: %v", err)
 	}
 
-	p.Log("Done")
+	log.Print("Done")
 	return nil
 }

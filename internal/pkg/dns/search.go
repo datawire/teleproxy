@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/logexec"
 )
 
 type searchDomains struct {
@@ -43,11 +44,11 @@ func OverrideSearchDomains(p *supervisor.Process, domains string) func() {
 }
 
 func getIfaces(p *supervisor.Process) (ifaces []string, err error) {
-	lines, err := p.Command("networksetup", "-listallnetworkservices").Capture(nil)
+	outputBytes, err := logexec.CommandContext(p.Context(), "networksetup", "-listallnetworkservices").Output()
 	if err != nil {
 		return
 	}
-	for _, line := range strings.Split(lines, "\n") {
+	for _, line := range strings.Split(string(outputBytes), "\n") {
 		if strings.Contains(line, "*") {
 			continue
 		}
@@ -60,12 +61,13 @@ func getIfaces(p *supervisor.Process) (ifaces []string, err error) {
 }
 
 func getSearchDomains(p *supervisor.Process, iface string) (domains string, err error) {
-	domains, err = p.Command("networksetup", "-getsearchdomains", iface).Capture(nil)
-	domains = strings.TrimSpace(domains)
+	var domainsBytes []byte
+	domainsBytes, err = logexec.CommandContext(p.Context(), "networksetup", "-getsearchdomains", iface).Output()
+	domains = strings.TrimSpace(string(domainsBytes))
 	return
 }
 
 func setSearchDomains(p *supervisor.Process, iface, domains string) (err error) {
-	err = p.Command("networksetup", "-setsearchdomains", iface, domains).Run()
+	err = logexec.CommandContext(p.Context(), "networksetup", "-setsearchdomains", iface, domains).Run()
 	return
 }

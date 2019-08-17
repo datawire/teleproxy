@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
-
-	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // A Process represents a goroutine being run from a Worker.
@@ -48,16 +46,6 @@ func (p *Process) Ready() {
 // Shutdown is used for graceful shutdown...
 func (p *Process) Shutdown() <-chan struct{} {
 	return p.shutdown
-}
-
-// Log is a backwards-compatibility shim.
-func (p *Process) Log(obj interface{}) {
-	dlog.GetLogger(p.Context()).Printf("%v", obj)
-}
-
-// Logf is a backwards-compatibility shim.
-func (p *Process) Logf(format string, args ...interface{}) {
-	dlog.GetLogger(p.Context()).Printf(format, args...)
 }
 
 func (p *Process) allocateID() int64 {

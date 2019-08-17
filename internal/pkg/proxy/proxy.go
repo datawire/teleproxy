@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"log"
 	"net"
@@ -15,7 +16,7 @@ type Proxy struct {
 }
 
 func NewProxy(address string, router func(*net.TCPConn) (string, error)) (proxy *Proxy, err error) {
-	tpu.Rlimit()
+	tpu.Rlimit(context.TODO())
 	ln, err := net.Listen("tcp", ":1234")
 	if err == nil {
 		proxy = &Proxy{ln, router}

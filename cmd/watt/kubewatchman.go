@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/datawire/teleproxy/pkg/k8s"
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -25,13 +26,14 @@ func (m *KubernetesWatchMaker) MakeKubernetesWatch(spec KubernetesWatchSpec) (*s
 	worker = &supervisor.Worker{
 		Name: fmt.Sprintf("kubernetes:%s", spec.WatchId()),
 		Work: func(p *supervisor.Process) error {
+			log := dlog.GetLogger(p.Context())
 			watcher := m.kubeAPI.Watcher()
 			watchFunc := func(watchId, ns, kind string) func(watcher *k8s.Watcher) {
 				return func(watcher *k8s.Watcher) {
 					resources := watcher.List(kind)
-					p.Logf("found %d %q in namespace %q", len(resources), kind, fmtNamespace(ns))
+					log.Printf("found %d %q in namespace %q", len(resources), kind, fmtNamespace(ns))
 					m.notify <- k8sEvent{watchId: watchId, kind: kind, resources: resources}
-					p.Logf("sent %q to receivers", kind)
+					log.Printf("sent %q to receivers", kind)
 				}
 			}
 
@@ -61,6 +63,7 @@ type kubewatchman struct {
 }
 
 func (w *kubewatchman) Work(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	p.Ready()
 
 	w.watched = make(map[string]*supervisor.Worker)
@@ -69,18 +72,18 @@ func (w *kubewatchman) Work(p *supervisor.Process) error {
 		select {
 		case watches := <-w.in:
 			found := make(map[string]*supervisor.Worker)
-			p.Logf("processing %d kubernetes watch specs", len(watches))
+			log.Printf("processing %d kubernetes watch specs", len(watches))
 			for _, spec := range watches {
 				worker, err := w.WatchMaker.MakeKubernetesWatch(spec)
 				if err != nil {
-					p.Logf("failed to create kubernetes watcher: %v", err)
+					log.Printf("failed to create kubernetes watcher: %v", err)
 					continue
 				}
 
 				if _, exists := w.watched[worker.Name]; exists {
 					found[worker.Name] = w.watched[worker.Name]
 				} else {
-					p.Logf("add kubernetes watcher %s\n", worker.Name)
+					log.Printf("add kubernetes watcher %s\n", worker.Name)
 					p.Supervisor().Supervise(worker)
 					w.watched[worker.Name] = worker
 					found[worker.Name] = worker
@@ -89,7 +92,7 @@ func (w *kubewatchman) Work(p *supervisor.Process) error {
 
 			for workerName, worker := range w.watched {
 				if _, exists := found[workerName]; !exists {
-					p.Logf("remove kubernetes watcher %s\n", workerName)
+					log.Printf("remove kubernetes watcher %s\n", workerName)
 					worker.Shutdown()
 					worker.Wait()
 				}
@@ -97,7 +100,7 @@ func (w *kubewatchman) Work(p *supervisor.Process) error {
 
 			w.watched = found
 		case <-p.Shutdown():
-			p.Logf("shutdown initiated")
+			log.Printf("shutdown initiated")
 			return nil
 		}
 	}
@@ -121,17 +124,18 @@ func fmtNamespace(ns string) string {
 }
 
 func (b *kubebootstrap) Work(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	for _, kind := range b.kinds {
-		p.Logf("adding kubernetes watch for %q in namespace %q", kind, fmtNamespace(kubernetesNamespace))
+		log.Printf("adding kubernetes watch for %q in namespace %q", kind, fmtNamespace(kubernetesNamespace))
 
 		watcherFunc := func(ns, kind string) func(watcher *k8s.Watcher) {
 			return func(watcher *k8s.Watcher) {
 				resources := watcher.List(kind)
-				p.Logf("found %d %q in namespace %q", len(resources), kind, fmtNamespace(ns))
+				log.Printf("found %d %q in namespace %q", len(resources), kind, fmtNamespace(ns))
 				for _, n := range b.notify {
 					n <- k8sEvent{kind: kind, resources: resources}
 				}
-				p.Logf("sent %q to %d receivers", kind, len(b.notify))
+				log.Printf("sent %q to %d receivers", kind, len(b.notify))
 			}
 		}
 
@@ -146,7 +150,7 @@ func (b *kubebootstrap) Work(p *supervisor.Process) error {
 	p.Ready()
 
 	for range p.Shutdown() {
-		p.Logf("shutdown initiated")
+		log.Printf("shutdown initiated")
 		b.kubeAPIWatcher.Stop()
 	}
 

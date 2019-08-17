@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/logexec"
 )
 
 type Translator struct {
@@ -16,7 +17,7 @@ type Translator struct {
 }
 
 func (t *Translator) ipt(p *supervisor.Process, args ...string) {
-	cmd := p.Command("iptables", append([]string{"-t", "nat"}, args...)...)
+	cmd := logexec.CommandContext(p.Context(), "iptables", append([]string{"-t", "nat"}, args...)...)
 	err := cmd.Start()
 	if err != nil {
 		panic(err)

@@ -1,6 +1,7 @@
 package dtest
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -11,7 +12,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/dlog"
+	"github.com/datawire/teleproxy/pkg/logexec"
 )
 
 const scope = "dtest"
@@ -32,12 +34,12 @@ func lines(str string) []string {
 
 func dockerPs(args ...string) ([]string, error) {
 	cmdline := append([]string{"docker", "ps", "--quiet", "--filter=label=scope=" + scope}, args...)
-	cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
-	output, err := cmd.Capture(nil)
+	cmd := logexec.CommandContext(dlog.WithLoggerField(context.TODO(), prefix, "k3s"), cmdline[0], cmdline[1:]...)
+	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
 	}
-	return lines(output), nil
+	return lines(string(output)), nil
 }
 
 var errorNoContainer = errors.New("no container")
@@ -65,9 +67,10 @@ func dockerUp(tag string, args ...string) (string, error) {
 		id, err = tag2id(tag)
 		if err == errorNoContainer {
 			cmdline := append([]string{"docker", "run", "--detach", "--label=scope=" + scope, "--label=" + tag, "--rm"}, args...)
-			cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
+			cmd := logexec.CommandContext(dlog.WithLoggerField(context.TODO(), prefix, "k3s"), cmdline[0], cmdline[1:]...)
 			var out string
-			out, _err := cmd.Capture(nil)
+			_out, _err := cmd.Output()
+			out = string(_out)
 			if _err != nil {
 				err = _err
 				return
@@ -83,8 +86,8 @@ func dockerUp(tag string, args ...string) (string, error) {
 func dockerKill(ids ...string) {
 	if len(ids) > 0 {
 		cmdline := append([]string{"docker", "kill", "--"}, ids...)
-		cmd := supervisor.Command(prefix, cmdline[0], cmdline[1:]...)
-		_, _ = cmd.Capture(nil)
+		cmd := logexec.CommandContext(dlog.WithLoggerField(context.TODO(), prefix, "k3s"), cmdline[0], cmdline[1:]...)
+		_ = cmd.Run()
 	}
 }
 
@@ -156,14 +159,14 @@ func isK3sReady() bool {
 		return false
 	}
 
-	cmd := supervisor.Command(prefix, "kubectl", "--kubeconfig="+kubeconfig, "api-resources", "--output=name")
-	output, err := cmd.Capture(nil)
+	cmd := logexec.CommandContext(dlog.WithLoggerField(context.TODO(), prefix, "k3s"), "kubectl", "--kubeconfig="+kubeconfig, "api-resources", "--output=name")
+	output, err := cmd.Output()
 	if err != nil {
 		return false
 	}
 
 	resources := make(map[string]struct{})
-	for _, line := range strings.Split(output, "\n") {
+	for _, line := range strings.Split(string(output), "\n") {
 		resources[strings.TrimSpace(line)] = struct{}{}
 	}
 
@@ -194,12 +197,12 @@ func GetKubeconfig() (string, error) {
 		return "", err
 	}
 
-	cmd := supervisor.Command(prefix, "docker", "exec", "--interactive", "--", id, "cat", "--", k3sConfigPath)
-	kubeconfig, err := cmd.Capture(nil)
+	cmd := logexec.CommandContext(dlog.WithLoggerField(context.TODO(), prefix, "k3s"), "docker", "exec", "--interactive", "--", id, "cat", "--", k3sConfigPath)
+	kubeconfigBytes, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	kubeconfig = strings.ReplaceAll(kubeconfig, "localhost:6443", net.JoinHostPort(dockerIP(), k3sPort))
+	kubeconfig := strings.ReplaceAll(string(kubeconfigBytes), "localhost:6443", net.JoinHostPort(dockerIP(), k3sPort))
 	return kubeconfig, nil
 }
 

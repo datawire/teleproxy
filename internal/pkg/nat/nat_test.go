@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/datawire/teleproxy/pkg/dtest"
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -28,7 +29,8 @@ func udp_listener(p *supervisor.Process, port int) error {
 	}
 	defer pc.Close()
 
-	p.Logf("listening on %s", bindaddr)
+	log := dlog.GetLogger(p.Context())
+	log.Printf("listening on %s", bindaddr)
 	p.Ready()
 
 	return p.Do(func() error {
@@ -38,7 +40,7 @@ func udp_listener(p *supervisor.Process, port int) error {
 			if err != nil {
 				return err
 			}
-			p.Logf("got packet from %v", addr)
+			log.Printf("got packet from %v", addr)
 			_, err = pc.WriteTo([]byte(fmt.Sprintf("UDP %d", port)), addr)
 			if err != nil {
 				return err
@@ -55,7 +57,8 @@ func tcp_listener(p *supervisor.Process, port int) error {
 	}
 	defer ln.Close()
 
-	p.Logf("listening on %s", bindaddr)
+	log := dlog.GetLogger(p.Context())
+	log.Printf("listening on %s", bindaddr)
 	p.Ready()
 
 	return p.Do(func() error {
@@ -64,7 +67,7 @@ func tcp_listener(p *supervisor.Process, port int) error {
 			if err != nil {
 				return err
 			}
-			p.Logf("got connection from %v", conn.RemoteAddr())
+			log.Printf("got connection from %v", conn.RemoteAddr())
 			_, err = conn.Write([]byte(fmt.Sprintf("TCP %d", port)))
 			conn.Close()
 			if err != nil {

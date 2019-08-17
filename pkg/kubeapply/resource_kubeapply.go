@@ -14,6 +14,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/datawire/teleproxy/pkg/k8s"
+	"github.com/datawire/teleproxy/pkg/logexec"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -116,7 +117,7 @@ func image(dir, dockerfile string) (string, error) {
 		}
 
 		ctx := filepath.Dir(filepath.Join(dir, dockerfile))
-		cmd := p.Command("docker", "build", "-f", filepath.Base(dockerfile), ".", "--iidfile", iidfile.Name())
+		cmd := logexec.CommandContext(p.Context(), "docker", "build", "-f", filepath.Base(dockerfile), ".", "--iidfile", iidfile.Name())
 		cmd.Dir = ctx
 		err = cmd.Run()
 		if err != nil {
@@ -135,7 +136,7 @@ func image(dir, dockerfile string) (string, error) {
 		}
 		tag := fmt.Sprintf("%s/%s", registry, short)
 
-		cmd = p.Command("docker", "tag", iid, tag)
+		cmd = logexec.CommandContext(p.Context(), "docker", "tag", iid, tag)
 		err = cmd.Run()
 		if err != nil {
 			return err
@@ -143,7 +144,7 @@ func image(dir, dockerfile string) (string, error) {
 
 		result = tag
 
-		cmd = p.Command("docker", "push", tag)
+		cmd = logexec.CommandContext(p.Context(), "docker", "push", tag)
 		return cmd.Run()
 	})
 	if len(errs) > 0 {

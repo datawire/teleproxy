@@ -5,17 +5,19 @@ import (
 	"runtime"
 
 	"github.com/datawire/teleproxy/pkg/supervisor"
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 var notifyRAI *RunAsInfo
 
 // Notify displays a desktop banner notification to the user
 func Notify(p *supervisor.Process, message string) {
+	log := dlog.GetLogger(p.Context())
 	if notifyRAI == nil {
 		var err error
 		notifyRAI, err = GuessRunAsInfo(p)
 		if err != nil {
-			p.Log(err)
+			log.Print(err)
 			notifyRAI = &RunAsInfo{}
 		}
 	}
@@ -31,10 +33,10 @@ func Notify(p *supervisor.Process, message string) {
 		return
 	}
 
-	p.Logf("NOTIFY: %s", message)
-	cmd := notifyRAI.Command(p, args...)
+	log.Printf("NOTIFY: %s", message)
+	cmd := notifyRAI.Command(p.Context(), args...)
 	if err := cmd.Run(); err != nil {
-		p.Logf("ERROR while notifying: %v", err)
+		log.Printf("ERROR while notifying: %v", err)
 	}
 }
 

@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -14,6 +13,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/dtest/testprocess"
 )
@@ -75,6 +75,7 @@ func get(url string) (*http.Response, error) {
 // nolint
 func poll(t *testing.T, url string, expected string) bool {
 	start := time.Now()
+	log := dlog.WrapTB(t)
 	for {
 		b := func() bool {
 			resp, err := get(url)

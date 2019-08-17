@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +19,9 @@ import (
 	"git.lukeshu.com/go/libsystemd/sd_daemon"
 	"github.com/pkg/errors"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/k8s"
+	"github.com/datawire/teleproxy/pkg/logexec"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 
 	"github.com/datawire/teleproxy/internal/pkg/api"
@@ -42,13 +43,13 @@ func dnsListeners(p *supervisor.Process, port string) (listeners []string) {
 		// This is the default docker bridge. We need to listen here because the nat logic we use to intercept
 		// dns packets will divert the packet to the interface it originates from, which in the case of
 		// containers is the docker bridge. Without this dns won't work from inside containers.
-		output, err := p.Command("docker", "inspect", "bridge",
-			"-f", "{{(index .IPAM.Config 0).Gateway}}").Capture(nil)
+		output, err := logexec.CommandContext(p.Context(), "docker", "inspect", "bridge",
+			"-f", "{{(index .IPAM.Config 0).Gateway}}").Output()
 		if err != nil {
-			p.Log("not listening on docker bridge")
+			dlog.GetLogger(p.Context()).Print("not listening on docker bridge")
 			return
 		}
-		listeners = append(listeners, net.JoinHostPort(strings.TrimSpace(output), port))
+		listeners = append(listeners, net.JoinHostPort(strings.TrimSpace(string(output)), port))
 	}
 
 	return
@@ -170,12 +171,13 @@ func RunTeleproxy(tele *Teleproxy, version string) error {
 	sup.Supervise(&supervisor.Worker{
 		Name: SignalWorker,
 		Work: func(p *supervisor.Process) error {
+			log := dlog.GetLogger(p.Context())
 			for {
 				select {
 				case <-p.Shutdown():
 					return nil
 				case s := <-signalChan:
-					p.Logf("TPY: %v", s)
+					log.Printf("TPY: %v", s)
 					if s == syscall.SIGHUP {
 						for _, w := range tele.workers {
 							w.Shutdown()
@@ -195,6 +197,8 @@ func RunTeleproxy(tele *Teleproxy, version string) error {
 			return nil
 		},
 	})
+
+	log := dlog.GetLogger(ctx)
 
 	log.Println("Log prefixes used by the different teleproxy workers:")
 	log.Println("")
@@ -221,6 +225,7 @@ func RunTeleproxy(tele *Teleproxy, version string) error {
 func selfcheck(p *supervisor.Process) error {
 	// XXX: these checks might not make sense if -dns is specified
 	lookupName := fmt.Sprintf("teleproxy%d.cachebust.telepresence.io", time.Now().Unix())
+	log := dlog.GetLogger(p.Context())
 	for _, name := range []string{fmt.Sprintf("%s.", lookupName), lookupName} {
 		ips, err := net.LookupIP(name)
 		if err != nil {
@@ -235,10 +240,10 @@ func selfcheck(p *supervisor.Process) error {
 			return errors.Errorf("found wrong ip for %s: %v", name, ips)
 		}
 
-		p.Logf("%s resolves to %v", name, ips)
+		log.Printf("%s resolves to %v", name, ips)
 	}
 
-	curl := p.Command("curl", "-sqI", fmt.Sprintf("%s/api/tables/", lookupName))
+	curl := logexec.CommandContext(p.Context(), "curl", "-sqI", fmt.Sprintf("%s/api/tables/", lookupName))
 	err := curl.Start()
 	if err != nil {
 		return err
@@ -260,19 +265,20 @@ func teleproxy(p *supervisor.Process, tele *Teleproxy) error {
 			Requires: []string{TranslatorWorker, APIWorker, DNSServerWorker, ProxyWorker, DNSConfigWorker},
 			Work: func(p *supervisor.Process) error {
 				err := selfcheck(p)
+				log := dlog.GetLogger(p.Context())
 				if err != nil {
 					if tele.NoCheck {
-						p.Logf("WARNING, SELF CHECK FAILED: %v", err)
+						log.Printf("WARNING, SELF CHECK FAILED: %v", err)
 					} else {
 						return errors.Wrap(err, "SELF CHECK FAILED")
 					}
 				} else {
-					p.Logf("SELF CHECK PASSED, SIGNALING READY")
+					log.Printf("SELF CHECK PASSED, SIGNALING READY")
 				}
 
 				err = p.Do(func() error {
 					if err := (sd_daemon.Notification{State: "READY=1"}).Send(false); err != nil {
-						p.Logf("Ignoring daemon notification failure: %v", err)
+						log.Printf("Ignoring daemon notification failure: %v", err)
 					}
 					p.Ready()
 					return nil
@@ -318,7 +324,7 @@ func (t *Teleproxy) addWorker(worker *supervisor.Worker) {
 const kubectlErr = "kubectl version 1.10 or greater is required"
 
 func checkKubectl(p *supervisor.Process) error {
-	output, err := p.Command("kubectl", "version", "--client", "-o", "json").Capture(nil)
+	output, err := logexec.CommandContext(p.Context(), "kubectl", "version", "--client", "-o", "json").Output()
 	if err != nil {
 		return errors.Wrap(err, kubectlErr)
 	}
@@ -330,7 +336,7 @@ func checkKubectl(p *supervisor.Process) error {
 		}
 	}
 
-	err = json.Unmarshal([]byte(output), &info)
+	err = json.Unmarshal(output, &info)
 	if err != nil {
 		return errors.Wrap(err, kubectlErr)
 	}
@@ -364,6 +370,7 @@ func intercept(p *supervisor.Process, tele *Teleproxy) error {
 	}
 
 	sup := p.Supervisor()
+	log := dlog.GetLogger(p.Context())
 
 	if tele.DNSIP == "" {
 		dat, err := ioutil.ReadFile("/etc/resolv.conf")
@@ -532,6 +539,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 		Name: K8sBridgeWorker,
 		Work: func(p *supervisor.Process) error {
 			// setup kubernetes bridge
+			log := dlog.GetLogger(p.Context())
 
 			kubeinfo := k8s.NewKubeInfo(tele.Kubeconfig, tele.Context, tele.Namespace)
 
@@ -540,7 +548,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 			if err != nil {
 				return err
 			}
-			p.Logf("kubernetes namespace=%s", namespace)
+			log.Printf("kubernetes namespace=%s", namespace)
 			paths := []string{
 				namespace + ".svc.cluster.local.",
 				"svc.cluster.local.",
@@ -575,7 +583,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 						decoded := svcResource{}
 						err := svc.Decode(&decoded)
 						if err != nil {
-							p.Logf("error decoding service: %v", err)
+							log.Printf("error decoding service: %v", err)
 							continue
 						}
 
@@ -639,7 +647,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 						}
 					}
 
-					post(table)
+					post(p.Context(), table)
 				}
 
 				// FIXME why do we ignore this error?
@@ -683,7 +691,7 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 				for name, ip := range w.Containers {
 					table.Add(route.Route{Name: name, Ip: ip, Proto: "tcp"})
 				}
-				post(table)
+				post(p.Context(), table)
 			})
 			p.Ready()
 			<-p.Shutdown()
@@ -693,7 +701,8 @@ func bridges(p *supervisor.Process, tele *Teleproxy) {
 	})
 }
 
-func post(tables ...route.Table) {
+func post(ctx context.Context, tables ...route.Table) {
+	log := dlog.GetLogger(ctx)
 	names := make([]string, len(tables))
 	for i, t := range tables {
 		names[i] = t.Name
@@ -739,7 +748,7 @@ func connect(tele *Teleproxy) {
 			if err != nil {
 				return err
 			}
-			apply := p.Command("kubectl", args...)
+			apply := logexec.CommandContext(p.Context(), "kubectl", args...)
 			apply.Stdin = strings.NewReader(teleproxyPod)
 			err = apply.Start()
 			if err != nil {
@@ -767,7 +776,7 @@ func connect(tele *Teleproxy) {
 			if err != nil {
 				return err
 			}
-			pf := p.Command("kubectl", args...)
+			pf := logexec.CommandContext(p.Context(), "kubectl", args...)
 			err = pf.Start()
 			if err != nil {
 				return
@@ -780,7 +789,7 @@ func connect(tele *Teleproxy) {
 					if err != nil {
 						return err
 					}
-					inspect := p.Command("kubectl", args...)
+					inspect := logexec.CommandContext(p.Context(), "kubectl", args...)
 					_ = inspect.Run() // Discard error as this is just for logging
 				}
 				return err
@@ -798,7 +807,7 @@ func connect(tele *Teleproxy) {
 		Work: func(p *supervisor.Process) (err error) {
 			// XXX: probably need some kind of keepalive check for ssh, first
 			// curl after wakeup seems to trigger detection of death
-			ssh := p.Command("ssh", "-D", "localhost:1080", "-C", "-N", "-oConnectTimeout=5",
+			ssh := logexec.CommandContext(p.Context(), "ssh", "-D", "localhost:1080", "-C", "-N", "-oConnectTimeout=5",
 				"-oExitOnForwardFailure=yes", "-oStrictHostKeyChecking=no",
 				"-oUserKnownHostsFile=/dev/null", "telepresence@localhost", "-p", "8022")
 			err = ssh.Start()

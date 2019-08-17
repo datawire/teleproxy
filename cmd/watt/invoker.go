@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 	"github.com/datawire/teleproxy/pkg/tpu"
 )
@@ -39,12 +40,13 @@ func NewInvoker(port int, notify []string) *invoker {
 func (a *invoker) Work(p *supervisor.Process) error {
 	a.process = p
 	p.Ready()
+	log := dlog.GetLogger(p.Context())
 	for {
 		select {
 		case a.latestSnapshot = <-a.Snapshots:
 			a.invoke()
 		case <-p.Shutdown():
-			p.Logf("shutdown initiated")
+			log.Printf("shutdown initiated")
 			return nil
 		}
 	}
@@ -60,10 +62,11 @@ func (a *invoker) storeSnapshot(snapshot string) int {
 }
 
 func (a *invoker) gcSnapshots() {
+	log := dlog.GetLogger(a.process.Context())
 	for k := range a.invokedSnapshots {
 		if k <= a.id-10 {
 			delete(a.invokedSnapshots, k)
-			a.process.Logf("deleting snapshot %d", k)
+			log.Printf("deleting snapshot %d", k)
 		}
 	}
 }
@@ -97,13 +100,14 @@ type apiServer struct {
 }
 
 func (s *apiServer) Work(p *supervisor.Process) error {
+	log := dlog.GetLogger(p.Context())
 	http.HandleFunc("/snapshots/", func(w http.ResponseWriter, r *http.Request) {
 		relpath := strings.TrimPrefix(r.URL.Path, "/snapshots/")
 
 		if relpath == "" {
 			w.Header().Set("content-type", "text/html")
 			if _, err := w.Write([]byte(s.index())); err != nil {
-				p.Logf("write index error: %v", err)
+				log.Printf("write index error: %v", err)
 			}
 		} else {
 			id, err := strconv.Atoi(relpath)
@@ -121,7 +125,7 @@ func (s *apiServer) Work(p *supervisor.Process) error {
 
 			w.Header().Set("content-type", "application/json")
 			if _, err := w.Write([]byte(snapshot)); err != nil {
-				p.Logf("write snapshot error: %v", err)
+				log.Printf("write snapshot error: %v", err)
 			}
 		}
 	})
@@ -132,7 +136,7 @@ func (s *apiServer) Work(p *supervisor.Process) error {
 		return err
 	}
 	p.Ready()
-	p.Logf("snapshot server listening on: %s", listenHostAndPort)
+	log.Printf("snapshot server listening on: %s", listenHostAndPort)
 	srv := &http.Server{
 		Addr: listenHostAndPort,
 	}

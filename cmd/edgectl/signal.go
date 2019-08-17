@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -15,13 +16,14 @@ func WaitForSignal(p *supervisor.Process) error {
 	signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
 	p.Ready()
 
+	log := dlog.GetLogger(p.Context())
 	select {
 	case killSignal := <-interrupt:
 		switch killSignal {
 		case os.Interrupt:
-			p.Log("Got SIGINT...")
+			log.Print("Got SIGINT...")
 		case syscall.SIGTERM:
-			p.Log("Got SIGTERM...")
+			log.Print("Got SIGTERM...")
 		}
 		p.Supervisor().Shutdown()
 	case <-p.Shutdown():

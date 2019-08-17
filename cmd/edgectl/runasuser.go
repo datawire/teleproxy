@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,6 +14,8 @@ import (
 	"github.com/kballard/go-shellquote"
 	"github.com/pkg/errors"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
+	"github.com/datawire/teleproxy/pkg/logexec"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -54,6 +57,7 @@ func GuessRunAsInfo(p *supervisor.Process) (*RunAsInfo, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "read /proc")
 	}
+	log := dlog.GetLogger(p.Context())
 	for _, fi := range pidDirs {
 		if !fi.IsDir() { // Skip /proc files
 			continue
@@ -64,7 +68,7 @@ func GuessRunAsInfo(p *supervisor.Process) (*RunAsInfo, error) {
 		// Read the command line for this proc
 		cmdline, err := ioutil.ReadFile("/proc/" + fi.Name() + "/cmdline")
 		if err != nil {
-			p.Logf("Guess/cmdline: Skipping %q: %v", fi.Name(), err)
+			log.Printf("Guess/cmdline: Skipping %q: %v", fi.Name(), err)
 			continue
 		}
 		// Skip programs that are not X
@@ -72,11 +76,11 @@ func GuessRunAsInfo(p *supervisor.Process) (*RunAsInfo, error) {
 		if len(args) == 0 || !bytes.ContainsRune(args[0], 'X') {
 			continue
 		}
-		p.Logf("Guess: Trying env info from: %q", args[0])
+		log.Printf("Guess: Trying env info from: %q", args[0])
 		// Capture the environment for this proc
 		environBlob, err := ioutil.ReadFile("/proc/" + fi.Name() + "/environ")
 		if err != nil {
-			p.Logf("Guess/environ: Skipping %q: %v", fi.Name(), err)
+			log.Printf("Guess/environ: Skipping %q: %v", fi.Name(), err)
 			continue
 		}
 		environBytes := bytes.Split(environBlob, []byte{0})
@@ -112,25 +116,25 @@ func GuessRunAsInfo(p *supervisor.Process) (*RunAsInfo, error) {
 	return &res, nil
 }
 
-// Command returns a supervisor.Cmd that is configured to run a subprocess as
+// Command returns a logexec.Cmd that is configured to run a subprocess as
 // the user in this context.
-func (rai *RunAsInfo) Command(p *supervisor.Process, args ...string) *supervisor.Cmd {
+func (rai *RunAsInfo) Command(ctx context.Context, args ...string) *logexec.Cmd {
 	if rai == nil {
 		rai = &RunAsInfo{}
 	}
-	var cmd *supervisor.Cmd
+	var cmd *logexec.Cmd
 	if rai.Name == "root" || len(rai.Name) == 0 {
-		cmd = p.Command(args[0], args[1:]...)
+		cmd = logexec.CommandContext(ctx, args[0], args[1:]...)
 	} else {
 		if runtime.GOOS == "darwin" {
 			// MacOS `su` doesn't appear to propagate signals and
 			// `sudo` is always (?) available.
 			sudoOpts := []string{"--user", rai.Name, "--set-home", "--preserve-env", "--"}
-			cmd = p.Command("sudo", append(sudoOpts, args...)...)
+			cmd = logexec.CommandContext(ctx, "sudo", append(sudoOpts, args...)...)
 		} else {
 			// FIXME(ark3): The above _should_ work on Linux, but
 			// doesn't work on my machine. I don't know why (yet).
-			cmd = p.Command("su", "-m", rai.Name, "-c", shellquote.Join(args...))
+			cmd = logexec.CommandContext(ctx, "su", "-m", rai.Name, "-c", shellquote.Join(args...))
 		}
 	}
 	cmd.Env = rai.Env

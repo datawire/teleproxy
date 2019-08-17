@@ -12,6 +12,7 @@ import (
 	"github.com/datawire/teleproxy/pkg/watt"
 
 	"github.com/datawire/teleproxy/pkg/k8s"
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -131,22 +132,23 @@ func (a *aggregator) isKubernetesBootstrapped(p *supervisor.Process) bool {
 // if the value of the populated info is an empty set of endpoints).
 func (a *aggregator) isComplete(p *supervisor.Process, watchset WatchSet) bool {
 	complete := true
+	log := dlog.GetLogger(p.Context())
 
 	for _, w := range watchset.KubernetesWatches {
 		if _, ok := a.ids[w.WatchId()]; ok {
-			p.Logf("initialized k8s watch: %s", w.WatchId())
+			log.Printf("initialized k8s watch: %s", w.WatchId())
 		} else {
 			complete = false
-			p.Logf("waiting for k8s watch: %s", w.WatchId())
+			log.Printf("waiting for k8s watch: %s", w.WatchId())
 		}
 	}
 
 	for _, w := range watchset.ConsulWatches {
 		if _, ok := a.ids[w.WatchId()]; ok {
-			p.Logf("initialized k8s watch: %s", w.WatchId())
+			log.Printf("initialized k8s watch: %s", w.WatchId())
 		} else {
 			complete = false
-			p.Logf("waiting for consul watch: %s", w.WatchId())
+			log.Printf("waiting for consul watch: %s", w.WatchId())
 		}
 	}
 
@@ -175,20 +177,21 @@ func (a *aggregator) notify(p *supervisor.Process) {
 
 	watchset := a.getWatches(p)
 
-	p.Logf("found %d kubernetes watches", len(watchset.KubernetesWatches))
-	p.Logf("found %d consul watches", len(watchset.ConsulWatches))
+	log := dlog.GetLogger(p.Context())
+	log.Printf("found %d kubernetes watches", len(watchset.KubernetesWatches))
+	log.Printf("found %d consul watches", len(watchset.ConsulWatches))
 	a.k8sWatches <- watchset.KubernetesWatches
 	a.consulWatches <- watchset.ConsulWatches
 
 	if !a.bootstrapped && a.isComplete(p, watchset) {
-		p.Logf("bootstrapped!")
+		log.Printf("bootstrapped!")
 		a.bootstrapped = true
 	}
 
 	if a.bootstrapped {
 		snapshot, err := a.generateSnapshot()
 		if err != nil {
-			p.Logf("generate snapshot failed %v", err)
+			log.Printf("generate snapshot failed %v", err)
 			return
 		}
 
@@ -199,7 +202,8 @@ func (a *aggregator) notify(p *supervisor.Process) {
 func (a *aggregator) getWatches(p *supervisor.Process) WatchSet {
 	snapshot, err := a.generateSnapshot()
 	if err != nil {
-		p.Logf("generate snapshot failed %v", err)
+		log := dlog.GetLogger(p.Context())
+		log.Printf("generate snapshot failed %v", err)
 		return WatchSet{}
 	}
 	result := a.watchHook(p, snapshot)
@@ -232,13 +236,14 @@ func invokeHook(p *supervisor.Process, hook, snapshot string) WatchSet {
 	cmd.Stderr = &errors
 	err := cmd.Run()
 	stderr := errors.String()
+	log := dlog.GetLogger(p.Context())
 	if stderr != "" {
 		for _, line := range lines(stderr) {
-			p.Logf("watch hook stderr: %s", line)
+			log.Printf("watch hook stderr: %s", line)
 		}
 	}
 	if err != nil {
-		p.Logf("watch hook failed: %v", err)
+		log.Printf("watch hook failed: %v", err)
 		return WatchSet{}
 	}
 
@@ -250,9 +255,9 @@ func invokeHook(p *supervisor.Process, hook, snapshot string) WatchSet {
 	err = decoder.Decode(&result)
 	if err != nil {
 		for _, line := range lines(encoded) {
-			p.Logf("watch hook: %s", line)
+			log.Printf("watch hook: %s", line)
 		}
-		p.Logf("watchset decode failed: %v", err)
+		log.Printf("watchset decode failed: %v", err)
 		return WatchSet{}
 	}
 
