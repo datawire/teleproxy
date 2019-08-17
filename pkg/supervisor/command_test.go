@@ -2,9 +2,12 @@ package supervisor
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/sirupsen/logrus"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 func TestMustCapture(t *testing.T) {
@@ -60,18 +63,19 @@ func TestCommandRun(t *testing.T) {
 	})
 }
 
-type LogToSlice struct {
-	Lines []string
-}
-
-func (lb *LogToSlice) Printf(format string, v ...interface{}) {
-	lb.Lines = append(lb.Lines, fmt.Sprintf(format, v...))
-}
-
 func TestCommandRunLogging(t *testing.T) {
-	sup := WithContext(context.Background())
-	theLogger := &LogToSlice{}
-	sup.Logger = theLogger
+	logOutput := new(strings.Builder)
+	ctx := dlog.WithLogger(context.Background(),
+		dlog.WrapLogrus(&logrus.Logger{
+			Out: logOutput,
+			Formatter: &logrus.TextFormatter{
+				DisableTimestamp: true,
+			},
+			Hooks: make(logrus.LevelHooks),
+			Level: logrus.DebugLevel,
+		}))
+
+	sup := WithContext(ctx)
 	sup.Supervise(&Worker{
 		Name: "charles",
 		Work: func(p *Process) error {
@@ -79,9 +83,10 @@ func TestCommandRunLogging(t *testing.T) {
 			if err := cmd.Run(); err != nil {
 				t.Errorf("unexpted error: %v", err)
 			}
-			if len(theLogger.Lines) != 6 {
+			logOutputLines := strings.Split(strings.TrimSuffix(logOutput.String(), "\n"), "\n")
+			if len(logOutputLines) != 6 {
 				t.Log("Expected 6 lines: process start, cmd start, 1, 2, 3, cmd end")
-				t.Logf("Got (%d lines): %q", len(theLogger.Lines), theLogger.Lines)
+				t.Logf("Got (%d lines): %q", len(logOutputLines), logOutputLines)
 				t.Fail()
 			}
 			return nil

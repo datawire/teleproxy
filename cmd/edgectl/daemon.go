@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -29,8 +30,10 @@ func RunAsDaemon() error {
 
 	d := &Daemon{}
 
-	sup := supervisor.WithContext(context.Background())
-	sup.Logger = SetUpLogging()
+	logger := SetUpLogging()
+	ctx := dlog.WithLogger(context.Background(), logger)
+
+	sup := supervisor.WithContext(ctx)
 	sup.Supervise(&supervisor.Worker{
 		Name: "daemon",
 		Work: d.acceptLoop,
@@ -52,19 +55,19 @@ func RunAsDaemon() error {
 		},
 	})
 
-	sup.Logger.Printf("---")
-	sup.Logger.Printf("Edge Control daemon %s starting...", displayVersion)
-	sup.Logger.Printf("PID is %d", os.Getpid())
+	logger.Printf("---")
+	logger.Printf("Edge Control daemon %s starting...", displayVersion)
+	logger.Printf("PID is %d", os.Getpid())
 	runErrors := sup.Run()
 
-	sup.Logger.Printf("")
+	logger.Printf("")
 	if len(runErrors) > 0 {
-		sup.Logger.Printf("Daemon has exited with %d error(s):", len(runErrors))
+		logger.Printf("Daemon has exited with %d error(s):", len(runErrors))
 		for _, err := range runErrors {
-			sup.Logger.Printf("- %v", err)
+			logger.Printf("- %v", err)
 		}
 	}
-	sup.Logger.Printf("Edge Control daemon %s is done.", displayVersion)
+	logger.Printf("Edge Control daemon %s is done.", displayVersion)
 	return errors.New("edgectl daemon has exited")
 }
 

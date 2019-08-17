@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 func Example() {
@@ -30,7 +31,7 @@ func Example() {
 			// store the unused port that was allocated so
 			// that the client knows where to talk to
 			addr = l.Addr().String()
-			p.Logf("listening on %s", addr)
+			dlog.GetLogger(p.Context()).Printf("listening on %s", addr)
 
 			http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 				w.Write([]byte("hello"))
@@ -70,7 +71,7 @@ func Example() {
 	})
 	errors := s.Run()
 	for _, err := range errors {
-		log.Println(err.Error())
+		dlog.GetLogger(ctx).Println(err.Error())
 	}
 	// Output: server ready
 	// client hello
