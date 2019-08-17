@@ -2,6 +2,7 @@ package nat
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strings"
 )
@@ -23,7 +24,7 @@ type Entry struct {
 }
 
 func (e *Entry) String() string {
-	return fmt.Sprintf("%s:%s->%s", e.Destination.Proto, e.Destination.Ip, e.Port)
+	return fmt.Sprintf("%s->%s", net.JoinHostPort(e.Destination.Proto, e.Destination.Ip), e.Port)
 }
 
 func (t *Translator) sorted() []Entry {

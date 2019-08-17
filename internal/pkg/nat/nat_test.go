@@ -86,7 +86,7 @@ func listeners(p *supervisor.Process, ports []int) error {
 
 func checkForwardTCP(t *testing.T, fromIP string, ports []string, toPort string) {
 	for _, port := range ports {
-		from := fmt.Sprintf("%s:%s", fromIP, port)
+		from := net.JoinHostPort(fromIP, port)
 
 		deadline := time.Now().Add(3 * time.Second)
 
@@ -116,12 +116,12 @@ func checkForwardTCP(t *testing.T, fromIP string, ports []string, toPort string)
 
 func checkNoForwardTCP(t *testing.T, fromIP string, ports []string) {
 	for _, port := range ports {
-		c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", fromIP, port), 50*time.Millisecond)
+		c, err := net.DialTimeout("tcp", net.JoinHostPort(fromIP, port), 50*time.Millisecond)
 		if err != nil {
 			continue
 		}
 		defer c.Close()
-		t.Errorf("connected to %s:%s, expecting no connection", fromIP, port)
+		t.Errorf("connected to %s, expecting no connection", net.JoinHostPort(fromIP, port))
 	}
 }
 

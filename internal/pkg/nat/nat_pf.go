@@ -195,5 +195,5 @@ func (t *Translator) GetOriginalDst(conn *net.TCPConn) (rawaddr []byte, host str
 		return
 	}
 
-	return nil, fmt.Sprintf("%s:%d", addr, port), nil
+	return nil, net.JoinHostPort(addr, strconv.Itoa(port)), nil
 }

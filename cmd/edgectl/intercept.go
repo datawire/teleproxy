@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -89,7 +90,7 @@ func (d *Daemon) ListIntercepts(_ *supervisor.Process, out *Emitter) error {
 		for k, v := range ii.Patterns {
 			out.Printf("      - %s: %s\n", k, v)
 		}
-		out.Printf("      and redirecting them to %s:%d\n", ii.TargetHost, ii.TargetPort)
+		out.Printf("      and redirecting them to %s\n", net.JoinHostPort(ii.TargetHost, strconv.Itoa(ii.TargetPort)))
 	}
 	if len(d.intercepts) == 0 {
 		out.Println("No intercepts")
@@ -174,7 +175,7 @@ func MakeIntercept(p *supervisor.Process, tm *TrafficManager, ii *InterceptInfo)
 		"-oConnectTimeout=5", "-oExitOnForwardFailure=yes",
 		"-oStrictHostKeyChecking=no", "-oUserKnownHostsFile=/dev/null",
 		"-p", strconv.Itoa(tm.sshPort),
-		"-R", fmt.Sprintf("%d:%s:%d", cept.port, ii.TargetHost, ii.TargetPort),
+		"-R", fmt.Sprintf("%d:%s", cept.port, net.JoinHostPort(ii.TargetHost, strconv.Itoa(ii.TargetPort))),
 	}
 	ssh, err := CheckedRetryingCommand(p, ii.Name+"-ssh", sshCmd, nil, nil, 5*time.Second)
 	if err != nil {

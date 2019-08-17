@@ -238,7 +238,7 @@ func RegistryUp() string {
 	return dockerUp("registry",
 		"--publish="+k3sPort+":6443",
 		"--publish="+registryPort+":"+registryPort,
-		"--env=REGISTRY_HTTP_ADDR=0.0.0.0:"+registryPort,
+		"--env=REGISTRY_HTTP_ADDR="+net.JoinHostPort("0.0.0.0", registryPort),
 		"--",
 		"registry:2")
 }
@@ -256,7 +256,7 @@ func DockerRegistry() string {
 
 	RegistryUp()
 
-	return fmt.Sprintf("%s:%s", dockerIP(), registryPort)
+	return net.JoinHostPort(dockerIP(), registryPort)
 }
 
 const dtestKubeconfig = "DTEST_KUBECONFIG"

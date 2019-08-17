@@ -36,7 +36,7 @@ func dnsListeners(p *supervisor.Process, port string) (listeners []string) {
 	// properly for udp, otherwise you get an "unexpected source
 	// blah thingy" because the dns reply packets look like they
 	// are coming from the wrong place
-	listeners = append(listeners, "127.0.0.1:"+port)
+	listeners = append(listeners, net.JoinHostPort("127.0.0.1", port))
 
 	if runtime.GOOS == "linux" {
 		// This is the default docker bridge. We need to listen here because the nat logic we use to intercept
@@ -48,7 +48,7 @@ func dnsListeners(p *supervisor.Process, port string) (listeners []string) {
 			p.Log("not listening on docker bridge")
 			return
 		}
-		listeners = append(listeners, fmt.Sprintf("%s:%s", strings.TrimSpace(output), port))
+		listeners = append(listeners, net.JoinHostPort(strings.TrimSpace(output), port))
 	}
 
 	return
