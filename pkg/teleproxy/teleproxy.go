@@ -493,7 +493,11 @@ func intercept(p *supervisor.Process, tele *Teleproxy) error {
 
 			var restore func()
 			if !tele.NoSearch {
-				restore = dns.OverrideSearchDomains(p, ".")
+				var err error
+				restore, err = dns.OverrideSearchDomains(p, ".")
+				if err != nil {
+					return err
+				}
 			}
 
 			p.Ready()

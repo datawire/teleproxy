@@ -21,11 +21,7 @@ type Translator struct {
 func pf(p *supervisor.Process, args []string, stdin string) error {
 	cmd := p.Command("pfctl", args...)
 	cmd.Stdin = strings.NewReader(stdin)
-	err := cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-	return cmd.Wait()
+	return cmd.Run()
 }
 
 func splitPorts(portspec string) (result []string) {
@@ -83,11 +79,11 @@ func (t *Translator) rules() string {
 
 var actions = []ppf.Action{ppf.ActionPass, ppf.ActionRDR}
 
-func (t *Translator) Enable(p *supervisor.Process) {
+func (t *Translator) Enable(p *supervisor.Process) error {
 	var err error
 	t.dev, err = ppf.Open()
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	for _, action := range actions {
@@ -100,7 +96,7 @@ func (t *Translator) Enable(p *supervisor.Process) {
 		rule.SetQuick(true)
 		err = t.dev.PrependRule(rule)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
 
@@ -125,8 +121,9 @@ func (t *Translator) Enable(p *supervisor.Process) {
 	}
 
 	if t.token == "" {
-		panic("unable to parse token")
+		return errors.New("unable to parse token")
 	}
+	return nil
 }
 
 func (t *Translator) Disable(p *supervisor.Process) {

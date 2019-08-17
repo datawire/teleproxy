@@ -13,14 +13,14 @@ type searchDomains struct {
 	Domains   string
 }
 
-func OverrideSearchDomains(p *supervisor.Process, domains string) func() {
+func OverrideSearchDomains(p *supervisor.Process, domains string) (func(), error) {
 	if runtime.GOOS != "darwin" {
-		return func() {}
+		return func() {}, nil
 	}
 
 	ifaces, err := getIfaces(p)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	previous := []searchDomains{}
 
@@ -40,7 +40,7 @@ func OverrideSearchDomains(p *supervisor.Process, domains string) func() {
 		for _, prev := range previous {
 			setSearchDomains(p, prev.Interface, prev.Domains)
 		}
-	}
+	}, nil
 }
 
 func getIfaces(p *supervisor.Process) (ifaces []string, err error) {

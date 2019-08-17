@@ -8,54 +8,61 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/datawire/teleproxy/pkg/supervisor"
 	"github.com/datawire/teleproxy/pkg/logexec"
+	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
 type Translator struct {
 	commonTranslator
 }
 
-func (t *Translator) ipt(p *supervisor.Process, args ...string) {
-	cmd := logexec.CommandContext(p.Context(), "iptables", append([]string{"-t", "nat"}, args...)...)
-	err := cmd.Start()
-	if err != nil {
-		panic(err)
+func (t *Translator) ipt(p *supervisor.Process, errp *error, args ...string) {
+	if *errp != nil {
+		return
 	}
-	cmd.Wait()
+	cmd := logexec.CommandContext(p.Context(), "iptables", append([]string{"-t", "nat"}, args...)...)
+	*errp = cmd.Start()
+	if *errp != nil {
+		return
+	}
+	_ = cmd.Wait() // I'm kinda thinking we should check this? --LukeShu
 }
 
-func (t *Translator) Enable(p *supervisor.Process) {
+func (t *Translator) Enable(p *supervisor.Process) error {
+	var err error
 	// XXX: -D only removes one copy of the rule, need to figure out how to remove all copies just in case
-	t.ipt(p, "-D", "OUTPUT", "-j", t.Name)
+	t.ipt(p, &err, "-D", "OUTPUT", "-j", t.Name)
 	// we need to be in the PREROUTING chain in order to get traffic
 	// from docker containers, not sure you would *always* want this,
 	// but probably makes sense as a default
-	t.ipt(p, "-D", "PREROUTING", "-j", t.Name)
-	t.ipt(p, "-N", t.Name)
-	t.ipt(p, "-F", t.Name)
-	t.ipt(p, "-I", "OUTPUT", "1", "-j", t.Name)
-	t.ipt(p, "-I", "PREROUTING", "1", "-j", t.Name)
-	t.ipt(p, "-A", t.Name, "-j", "RETURN", "--dest", "127.0.0.1/32", "-p", "tcp")
+	t.ipt(p, &err, "-D", "PREROUTING", "-j", t.Name)
+	t.ipt(p, &err, "-N", t.Name)
+	t.ipt(p, &err, "-F", t.Name)
+	t.ipt(p, &err, "-I", "OUTPUT", "1", "-j", t.Name)
+	t.ipt(p, &err, "-I", "PREROUTING", "1", "-j", t.Name)
+	t.ipt(p, &err, "-A", t.Name, "-j", "RETURN", "--dest", "127.0.0.1/32", "-p", "tcp")
+	return err
 }
 
-func (t *Translator) Disable(p *supervisor.Process) {
+func (t *Translator) Disable(p *supervisor.Process) error {
+	var err error
 	// XXX: -D only removes one copy of the rule, need to figure out how to remove all copies just in case
-	t.ipt(p, "-D", "OUTPUT", "-j", t.Name)
-	t.ipt(p, "-D", "PREROUTING", "-j", t.Name)
-	t.ipt(p, "-F", t.Name)
-	t.ipt(p, "-X", t.Name)
+	t.ipt(p, &err, "-D", "OUTPUT", "-j", t.Name)
+	t.ipt(p, &err, "-D", "PREROUTING", "-j", t.Name)
+	t.ipt(p, &err, "-F", t.Name)
+	t.ipt(p, &err, "-X", t.Name)
+	return err
 }
 
-func (t *Translator) ForwardTCP(p *supervisor.Process, ip, port, toPort string) {
-	t.forward(p, "tcp", ip, port, toPort)
+func (t *Translator) ForwardTCP(p *supervisor.Process, ip, port, toPort string) error {
+	return t.forward(p, "tcp", ip, port, toPort)
 }
 
-func (t *Translator) ForwardUDP(p *supervisor.Process, ip, port, toPort string) {
-	t.forward(p, "udp", ip, port, toPort)
+func (t *Translator) ForwardUDP(p *supervisor.Process, ip, port, toPort string) error {
+	return t.forward(p, "udp", ip, port, toPort)
 }
 
-func (t *Translator) forward(p *supervisor.Process, protocol, ip, port, toPort string) {
+func (t *Translator) forward(p *supervisor.Process, protocol, ip, port, toPort string) error {
 	t.clear(p, protocol, ip, port)
 	args := []string{"-A", t.Name, "-j", "REDIRECT", "-p", protocol, "--dest", ip + "/32"}
 	if port != "" {
@@ -66,8 +73,13 @@ func (t *Translator) forward(p *supervisor.Process, protocol, ip, port, toPort s
 		}
 	}
 	args = append(args, "--to-ports", toPort)
-	t.ipt(p, args...)
+	var err error
+	t.ipt(p, &err, args...)
+	if err != nil {
+		return err
+	}
 	t.Mappings[Address{protocol, ip, port}] = toPort
+	return nil
 }
 
 func (t *Translator) ClearTCP(p *supervisor.Process, ip, port string) {
@@ -78,7 +90,7 @@ func (t *Translator) ClearUDP(p *supervisor.Process, ip, port string) {
 	t.clear(p, "udp", ip, port)
 }
 
-func (t *Translator) clear(p *supervisor.Process, protocol, ip, port string) {
+func (t *Translator) clear(p *supervisor.Process, protocol, ip, port string) error {
 	if previous, exists := t.Mappings[Address{protocol, ip, port}]; exists {
 		args := []string{"-D", t.Name, "-j", "REDIRECT", "-p", protocol, "--dest", ip + "/32"}
 		if port != "" {
@@ -89,9 +101,14 @@ func (t *Translator) clear(p *supervisor.Process, protocol, ip, port string) {
 			}
 		}
 		args = append(args, "--to-ports", previous)
-		t.ipt(p, args...)
+		var err error
+		t.ipt(p, &err, args...)
+		if err != nil {
+			return err
+		}
 		delete(t.Mappings, Address{protocol, ip, port})
 	}
+	return nil
 }
 
 const (
