@@ -56,10 +56,10 @@ func TestCommandRun(t *testing.T) {
 }
 
 func TestCommandRunLogging(t *testing.T) {
-	logoutput := new(strings.Builder)
+	logOutput := new(strings.Builder)
 	ctx := dlog.WithLogger(context.Background(),
 		dlog.WrapLogrus(&logrus.Logger{
-			Out: logoutput,
+			Out: logOutput,
 			Formatter: &logrus.TextFormatter{
 				DisableTimestamp: true,
 			},
@@ -85,12 +85,15 @@ func TestCommandRunLogging(t *testing.T) {
 		`level=info msg="[pid:XXPIDXX] finished successfully: exit status 0"`,
 		``,
 	}
-	receivedLines := strings.Split(regexp.MustCompile("pid:[0-9]+").ReplaceAllString(logoutput.String(), "pid:XXPIDXX"), "\n") //nolint:lll
+
+	receivedLines := strings.Split(regexp.MustCompile("pid:[0-9]+").ReplaceAllString(logOutput.String(), "pid:XXPIDXX"), "\n") //nolint:lll
 	if len(receivedLines) != len(expectedLines) {
 		t.Log("log output didn't have the correct number of lines:")
+		t.Logf("expected lines: %d", len(expectedLines))
 		for i, line := range expectedLines {
 			t.Logf("expected line %d: %q", i, line)
 		}
+		t.Logf("received lines: %d", len(receivedLines))
 		for i, line := range receivedLines {
 			t.Logf("received line %d: %q", i, line)
 		}

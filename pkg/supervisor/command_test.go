@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -79,18 +80,50 @@ func TestCommandRunLogging(t *testing.T) {
 	sup.Supervise(&Worker{
 		Name: "charles",
 		Work: func(p *Process) error {
-			cmd := p.Command("bash", "-c", "for i in $(seq 1 3); do echo $i; sleep 0.2; done")
-			if err := cmd.Run(); err != nil {
-				t.Errorf("unexpted error: %v", err)
-			}
-			logOutputLines := strings.Split(strings.TrimSuffix(logOutput.String(), "\n"), "\n")
-			if len(logOutputLines) != 6 {
-				t.Log("Expected 6 lines: process start, cmd start, 1, 2, 3, cmd end")
-				t.Logf("Got (%d lines): %q", len(logOutputLines), logOutputLines)
-				t.Fail()
-			}
-			return nil
+			// The "cat" in the command is important, otherwise the
+			// ordering of the "stdin < EOF" and the "stdout+stderr > 1"
+			// lines could go either way.
+			return p.Command("bash", "-c", "cat; for i in $(seq 1 3); do echo $i; sleep 0.2; done").Run()
 		},
 	})
-	sup.Run()
+	errs := sup.Run()
+	if len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+
+	//nolint:lll
+	expectedLines := []string{
+		`level=info msg="charles: starting"`,
+		`level=info msg="[pid:XXPIDXX] started command []string{\"bash\", \"-c\", \"cat; for i in $(seq 1 3); do echo $i; sleep 0.2; done\"}" worker=charles`,
+		`level=info msg="[pid:XXPIDXX] stdin  < EOF" worker=charles`,
+		`level=info msg="[pid:XXPIDXX] stdout+stderr > \"1\\n\"" worker=charles`,
+		`level=info msg="[pid:XXPIDXX] stdout+stderr > \"2\\n\"" worker=charles`,
+		`level=info msg="[pid:XXPIDXX] stdout+stderr > \"3\\n\"" worker=charles`,
+		`level=info msg="[pid:XXPIDXX] finished successfully: exit status 0" worker=charles`,
+		`level=info msg=exited worker=charles`,
+		``,
+	}
+
+	receivedLines := strings.Split(regexp.MustCompile("pid:[0-9]+").ReplaceAllString(logOutput.String(), "pid:XXPIDXX"), "\n") //nolint:lll
+	if len(receivedLines) != len(expectedLines) {
+		t.Log("log output didn't have the correct number of lines:")
+		t.Logf("expected lines: %d", len(expectedLines))
+		for i, line := range expectedLines {
+			t.Logf("expected line %d: %q", i, line)
+		}
+		t.Logf("received lines: %d", len(receivedLines))
+		for i, line := range receivedLines {
+			t.Logf("received line %d: %q", i, line)
+		}
+		t.FailNow()
+	}
+	for i, expectedLine := range expectedLines {
+		receivedLine := receivedLines[i]
+		if receivedLine != expectedLine {
+			t.Errorf("log output line %d didn't match expectations:\n"+
+				"expected: %q\n"+
+				"received: %q\n",
+				i, expectedLine, receivedLine)
+		}
+	}
 }
