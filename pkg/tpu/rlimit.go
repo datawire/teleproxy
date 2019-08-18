@@ -1,11 +1,15 @@
 package tpu
 
 import (
-	"log"
+	"context"
 	"syscall"
+
+	"github/datawire/teleproxy/pkg/dlog"
 )
 
-func Rlimit() {
+func Rlimit(ctx context.Context) {
+	log := dlog.GetLogger(ctx)
+
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {
