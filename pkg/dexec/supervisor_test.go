@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus" //nolint:depguard
 
 	exec "github.com/datawire/teleproxy/pkg/dexec"
 	"github.com/datawire/teleproxy/pkg/dlog"

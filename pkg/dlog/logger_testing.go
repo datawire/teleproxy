@@ -2,7 +2,7 @@ package dlog
 
 import (
 	"fmt"
-	"log"
+	"log" //nolint:depguard
 	"sort"
 	"strings"
 	"testing"

@@ -1,12 +1,16 @@
 package main
 
 import (
-	"log"
+	"context"
 	"net/http"
 	"os"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 func main() {
+	log := dlog.GetLogger(context.Background())
+
 	body := os.Getenv("HTTPTEST_BODY")
 	if body == "" {
 		body = "HTTPTEST"
@@ -19,5 +23,6 @@ func main() {
 		}
 	})
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Error(http.ListenAndServe(":8080", nil))
+	os.Exit(1)
 }

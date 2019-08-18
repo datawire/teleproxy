@@ -1,13 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/k8s"
 )
 
@@ -26,6 +27,8 @@ func main() {
 	statusFile := st.Flags().StringP("update", "u", "", "update with new status from file (must be json)")
 
 	st.RunE = func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		log := dlog.GetLogger(ctx)
 		var status map[string]interface{}
 
 		if *statusFile != "" {

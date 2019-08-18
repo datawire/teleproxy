@@ -453,7 +453,7 @@ func intercept(p *supervisor.Process, tele *Teleproxy) error {
 			// hmm, we may not actually need to get the original
 			// destination, we could just forward each ip to a unique port
 			// and either listen on that port or run port-forward
-			proxy, err := proxy.NewProxy(fmt.Sprintf(":%s", ProxyRedirPort), iceptor.Destination)
+			proxy, err := proxy.NewProxy(p.Context(), fmt.Sprintf(":%s", ProxyRedirPort), iceptor.Destination)
 			if err != nil {
 				return errors.Wrap(err, "Proxy")
 			}

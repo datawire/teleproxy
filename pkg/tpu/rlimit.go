@@ -1,11 +1,16 @@
 package tpu
 
 import (
-	"log"
+	"context"
 	"syscall"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
-func Rlimit() {
+// Rlimit sets the RLIMIT_NOFILE file descriptor limit very high.
+func Rlimit(ctx context.Context) {
+	log := dlog.GetLogger(ctx)
+
 	var rLimit syscall.Rlimit
 	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
 	if err != nil {

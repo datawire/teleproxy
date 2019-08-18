@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus" //nolint:depguard
 	"github.com/spf13/cobra"
 
+	"github.com/datawire/teleproxy/pkg/dlog"
 	"github.com/datawire/teleproxy/pkg/dtest"
 )
 
@@ -26,15 +28,16 @@ func main() {
 		SilenceUsage:  true,
 	}
 
-	var logFile *os.File
+	ctx := context.Background()
 
 	k3s.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "k3sctl.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			return err
 		}
-
+		log := logrus.New()
 		log.SetOutput(logFile)
+		ctx = dlog.WithLogger(ctx, dlog.WrapLogrus(log))
 		return nil
 	}
 
@@ -128,7 +131,6 @@ func main() {
 	err := k3s.Execute()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		logFile.Close()
 		os.Exit(1)
 	}
 }

@@ -1,13 +1,15 @@
 package testprocess
 
 import (
+	"context"
 	"flag"
-	"log"
 	"os"
 	"os/exec"
 	"reflect"
 	"runtime"
 	"runtime/debug"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // flags.  Initialize these in the init() step, in case anything else
@@ -91,6 +93,7 @@ func Dispatch() {
 	if *name == "" {
 		return
 	}
+	log := dlog.GetLogger(context.TODO())
 
 	log.Printf("TESTPROCESS %s PID: %d", *name, os.Getpid())
 

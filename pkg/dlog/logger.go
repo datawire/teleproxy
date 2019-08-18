@@ -18,7 +18,7 @@ package dlog
 
 import (
 	"context"
-	"log"
+	"log" //nolint:depguard
 )
 
 // Logger is a generic logging interface that most loggers implement,

@@ -3,9 +3,10 @@ package supervisor
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"time"
+
+	"github.com/datawire/teleproxy/pkg/dlog"
 )
 
 // Logger is what Supervisor may use as a logging backend.
@@ -19,7 +20,7 @@ type DefaultLogger struct{}
 
 // Printf implements the Logger interface.
 func (d *DefaultLogger) Printf(format string, v ...interface{}) {
-	log.Printf(format, v...)
+	dlog.GetLogger(context.TODO()).Printf(format, v...)
 }
 
 // Run creates a single-purpose Supervisor and runs a worker function

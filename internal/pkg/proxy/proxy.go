@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"io"
 	"log"
 	"net"
@@ -14,8 +15,13 @@ type Proxy struct {
 	router   func(*net.TCPConn) (string, error)
 }
 
-func NewProxy(address string, router func(*net.TCPConn) (string, error)) (proxy *Proxy, err error) {
-	tpu.Rlimit()
+// A RouterFunc determines where an incoming TCP connection should be
+// routed to.
+type RouterFunc func(*net.TCPConn) (string, error)
+
+// NewProxy creates a new Proxy.
+func NewProxy(ctx context.Context, address string, router RouterFunc) (proxy *Proxy, err error) {
+	tpu.Rlimit(ctx)
 	ln, err := net.Listen("tcp", ":1234")
 	if err == nil {
 		proxy = &Proxy{ln, router}

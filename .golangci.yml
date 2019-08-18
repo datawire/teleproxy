@@ -23,6 +23,14 @@ linters-settings:
       - golang.org/x/net/context # use "context"
       - github.com/datawire/kat-backend/xds/ # use "github.com/datawire/ambassador/go/"
       - github.com/lyft/ratelimit/proto/ # use "github.com/datawire/ambassador/go/"
+      - log # use "github.com/datawire/teleproxy/pkg/dlog"
+
+      # logus should be "mostly" forbidden.  Most packages should use
+      # "github.com/datawire/teleproxy/pkg/dlog" instead.  But, main()
+      # functions that call dlog.WithLogger() should use
+      # logrus... just write "//notlint:depguard" when importing
+      # logrus.
+      - github.com/sirupsen/logrus
 issues:
   exclude-use-default: false
   new-from-rev: 61cc8815bf172110171836581439d1822c161b42

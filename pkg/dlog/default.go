@@ -3,7 +3,7 @@ package dlog
 import (
 	"sync"
 
-	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus" //nolint:depguard
 )
 
 var (

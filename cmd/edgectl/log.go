@@ -6,7 +6,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus" //nolint:depguard
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/natefinch/lumberjack.v2"
 

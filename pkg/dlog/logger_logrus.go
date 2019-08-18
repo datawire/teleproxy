@@ -2,10 +2,10 @@ package dlog
 
 import (
 	"io"
-	"log"
+	"log" //nolint:depguard
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus" //nolint:depguard
 )
 
 type logrusLogger interface {
