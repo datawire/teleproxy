@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -155,7 +156,7 @@ func TestAlreadyRunning(t *testing.T) {
 	})
 }
 
-const HupConfig = "/tmp/teleproxy_test_hup_cluster.yaml"
+var HupConfig = filepath.Join(os.TempDir(), "teleproxy_test_hup_cluster.yaml")
 
 var hup = testprocess.MakeSudo(func() {
 	os.Args = []string{"teleproxy", fmt.Sprintf("--kubeconfig=%s", HupConfig)}
