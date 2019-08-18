@@ -7,6 +7,8 @@ import (
 	"time"
 )
 
+// This is a machine-scoped file; it is necessary that it be in the
+// global "/tmp" instead of obeying TMPDIR via os.TempDir.
 const pattern = "/tmp/datawire-machine-scoped-%s.lock"
 
 func exit(filename string, err error) {

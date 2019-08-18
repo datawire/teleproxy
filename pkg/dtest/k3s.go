@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -215,7 +216,7 @@ func getKubeconfigPath() string {
 		panic(err)
 	}
 
-	kubeconfig := fmt.Sprintf("/tmp/dtest-kubeconfig-%s-%s.yaml", user.Username, id)
+	kubeconfig := filepath.Join(os.TempDir(), fmt.Sprintf("dtest-kubeconfig-%s-%s.yaml", user.Username, id))
 	contents := GetKubeconfig()
 
 	err = ioutil.WriteFile(kubeconfig, []byte(contents), 0644)

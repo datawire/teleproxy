@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 var Version = "(unknown version)"
 
 const socketName = "/var/run/edgectl.socket"
-const logfile = "/tmp/edgectl.log"
+var logfile = filepath.Join(os.TempDir(), "edgectl.log")
 const apiVersion = 1
 
 var failedToConnect = `Failed to connect to the daemon. Is it still running?

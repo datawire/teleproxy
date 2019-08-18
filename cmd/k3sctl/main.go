@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ func main() {
 	var logFile *os.File
 
 	k3s.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
-		logFile, err := os.OpenFile("/tmp/k3sctl.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		logFile, err := os.OpenFile(filepath.Join(os.TempDir(), "k3sctl.log"), os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			return err
 		}
