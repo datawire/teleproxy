@@ -188,7 +188,7 @@ func TestSmokeOutbound(t *testing.T) {
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
-		t.Fatal("Net overrides timeout")
+		t.Fatal("timed out waiting for net overrides")
 	})
 
 	t.Run("connect", func(t *testing.T) {
@@ -217,6 +217,22 @@ func TestSmokeOutbound(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		t.Fatal("timed out waiting for bridge")
+	})
+
+	t.Run("await-service", func(t *testing.T) {
+		for i := 0; i < 30; i++ {
+			err := run(
+				"kubectl", nsArg, "run", "curl-from-cluster", "--rm", "-it",
+				"--image=pstauffer/curl", "--restart=Never", "--",
+				"curl", "--silent", "--output", "/dev/null",
+				"http://hello-world."+namespace,
+			)
+			if err == nil {
+				return
+			}
+			time.Sleep(500 * time.Millisecond)
+		}
+		t.Fatal("timed out waiting for hello-world service")
 	})
 
 	t.Run("bridge", func(t *testing.T) {
