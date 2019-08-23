@@ -133,52 +133,53 @@ func TestSmokeOutbound(t *testing.T) {
 	var out string
 	var err error
 
-	// Setup
-	assert.NotError(run("sudo", "true"), "acquire privileges")
-	assert.NotError(run("printenv", "KUBECONFIG"), "ensure cluster is set")
-	assert.NotError(run("sudo", "rm", "-f", "/tmp/edgectl.log"), "remove old log")
-
-	// Cluster setup
-	assert.NotError(
-		run("kubectl", "delete", "pod", "teleproxy", "--ignore-not-found", "--wait=true"),
-		"check cluster connectivity",
-	)
 	namespace := fmt.Sprintf("edgectl-%d", os.Getpid())
 	nsArg := fmt.Sprintf("--namespace=%s", namespace)
-	assert.NotError(run("kubectl", "create", "namespace", namespace), "create test namespace")
+
+	t.Run("setup", func(t *testing.T) {
+		assert.NotError(run("sudo", "true"), "acquire privileges")
+		assert.NotError(run("printenv", "KUBECONFIG"), "ensure cluster is set")
+		assert.NotError(run("sudo", "rm", "-f", "/tmp/edgectl.log"), "remove old log")
+		assert.NotError(
+			run("kubectl", "delete", "pod", "teleproxy", "--ignore-not-found", "--wait=true"),
+			"check cluster connectivity",
+		)
+		assert.NotError(run("kubectl", "create", "namespace", namespace), "create test namespace")
+		assert.NotError(
+			run("kubectl", nsArg, "create", "deploy", "hello-world", "--image=ark3/hello-world"),
+			"create deployment",
+		)
+		assert.NotError(
+			run("kubectl", nsArg, "expose", "deploy", "hello-world", "--port=80", "--target-port=8000"),
+			"create service",
+		)
+		assert.NotError(
+			run("kubectl", nsArg, "get", "svc,deploy", "hello-world"),
+			"check svc/deploy",
+		)
+	})
 	defer func() {
 		assert.NotError(
 			run("kubectl", "delete", "namespace", namespace, "--wait=false"),
 			"delete test namespace",
 		)
 	}()
-	assert.NotError(
-		run("kubectl", nsArg, "create", "deploy", "hello-world", "--image=ark3/hello-world"),
-		"create deployment",
-	)
-	assert.NotError(
-		run("kubectl", nsArg, "expose", "deploy", "hello-world", "--port=80", "--target-port=8000"),
-		"create service",
-	)
-	assert.NotError(
-		run("kubectl", nsArg, "get", "svc,deploy", "hello-world"),
-		"check svc/deploy",
-	)
 
-	// Pre-daemon tests
-	assert.HasError(runCmd(eStatus), "status with no daemon")
-	assert.HasError(runCmd(eDaemon), "daemon without sudo")
+	t.Run("pre-daemon", func(t *testing.T) {
+		assert.HasError(runCmd(eStatus), "status with no daemon")
+		assert.HasError(runCmd(eDaemon), "daemon without sudo")
+	})
 
-	// Daemon tests
-	assert.NotError(runCmd(buildExecutable), "build executable")
-	assert.NotError(run("sudo", executable, "daemon"), "launch daemon")
+	t.Run("daemon-build-launch", func(t *testing.T) {
+		assert.NotError(runCmd(buildExecutable), "build executable")
+		assert.NotError(run("sudo", executable, "daemon"), "launch daemon")
+		assert.NotError(runCmd(eVersion), "version with daemon")
+		eStatus = testprocess.Make(runMeStatus)
+		assert.NotError(runCmd(eStatus), "status with daemon")
+	})
 	defer func() { assert.NotError(runCmd(eQuit), "quit daemon") }()
-	assert.NotError(runCmd(eVersion), "version with daemon")
-	eStatus = testprocess.Make(runMeStatus)
-	assert.NotError(runCmd(eStatus), "status with daemon")
 
-	// Wait for network overrides
-	func() {
+	t.Run("await-net-overrides", func(t *testing.T) {
 		for i := 0; i < 30; i++ {
 			eStatus = testprocess.Make(runMeStatus)
 			out, _ := captureCmd(eStatus)
@@ -188,24 +189,25 @@ func TestSmokeOutbound(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		t.Fatal("Net overrides timeout")
-	}()
+	})
 
-	assert.NotError(runCmd(eConnect), "connect")
+	t.Run("connect", func(t *testing.T) {
+		assert.NotError(runCmd(eConnect), "connect")
+		eStatus = testprocess.Make(runMeStatus)
+		out, err = captureCmd(eStatus)
+		assert.NotError(err, "status connected")
+		if !strings.Contains(out, "Context") {
+			t.Fatal("Expected Context in connected status output")
+		}
+	})
 	defer func() {
 		assert.NotError(
 			run("kubectl", "delete", "pod", "teleproxy", "--ignore-not-found", "--wait=false"),
 			"make next time quicker",
 		)
 	}()
-	eStatus = testprocess.Make(runMeStatus)
-	out, err = captureCmd(eStatus)
-	assert.NotError(err, "status connected")
-	if !strings.Contains(out, "Context") {
-		t.Fatal("Expected Context in status output")
-	}
 
-	// Wait for bridge
-	func() {
+	t.Run("await-bridge", func(t *testing.T) {
 		for i := 0; i < 30; i++ {
 			eStatus = testprocess.Make(runMeStatus)
 			out, _ := captureCmd(eStatus)
@@ -214,25 +216,27 @@ func TestSmokeOutbound(t *testing.T) {
 			}
 			time.Sleep(500 * time.Millisecond)
 		}
-		t.Fatal("timed out waiting for net overrides")
-	}()
+		t.Fatal("timed out waiting for bridge")
+	})
 
-	// Bridge tests
-	assert.NotError(run("curl", "-sv", "hello-world."+namespace), "check bridge")
+	t.Run("bridge", func(t *testing.T) {
+		assert.NotError(run("curl", "-sv", "hello-world."+namespace), "check bridge")
+	})
 
-	// Wind down
-	eStatus = testprocess.Make(runMeStatus)
-	out, err = captureCmd(eStatus)
-	assert.NotError(err, "status connected")
-	if !strings.Contains(out, "Context") {
-		t.Fatal("Expected Context in status output")
-	}
-	assert.NotError(runCmd(eDisconnect), "disconnect")
-	eStatus = testprocess.Make(runMeStatus)
-	out, err = captureCmd(eStatus)
-	assert.NotError(err, "status disconnected")
-	if !strings.Contains(out, "Not connected") {
-		t.Fatal("Expected Not connected in status output")
-	}
-	assert.HasError(run("curl", "-sv", "hello-world."+namespace), "check disconnected")
+	t.Run("wind-down", func(t *testing.T) {
+		eStatus = testprocess.Make(runMeStatus)
+		out, err = captureCmd(eStatus)
+		assert.NotError(err, "status connected")
+		if !strings.Contains(out, "Context") {
+			t.Fatal("Expected Context in connected status output")
+		}
+		assert.NotError(runCmd(eDisconnect), "disconnect")
+		eStatus = testprocess.Make(runMeStatus)
+		out, err = captureCmd(eStatus)
+		assert.NotError(err, "status disconnected")
+		if !strings.Contains(out, "Not connected") {
+			t.Fatal("Expected Not connected in status output")
+		}
+		assert.HasError(run("curl", "-sv", "hello-world."+namespace), "check disconnected")
+	})
 }
