@@ -177,8 +177,20 @@ func (a *aggregator) notify(p *supervisor.Process) {
 
 	p.Logf("found %d kubernetes watches", len(watchset.KubernetesWatches))
 	p.Logf("found %d consul watches", len(watchset.ConsulWatches))
-	a.k8sWatches <- watchset.KubernetesWatches
-	a.consulWatches <- watchset.ConsulWatches
+
+	select {
+	case a.k8sWatches <- watchset.KubernetesWatches:
+		p.Logf("notified Kubernetes watch")
+	default:
+		p.Logf("Kubernetes watch not notified")
+	}
+
+	select {
+	case a.consulWatches <- watchset.ConsulWatches:
+		p.Logf("notified Consul watch")
+	default:
+		p.Logf("Consul watch not notified")
+	}
 
 	if !a.bootstrapped && a.isComplete(p, watchset) {
 		p.Logf("bootstrapped!")
