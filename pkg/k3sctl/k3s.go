@@ -50,7 +50,7 @@ func tag2id(tag string) string {
 func dockerUp(tag string, args ...string) string {
 	var id string
 
-	dlock.WithNamedMachineLock("docker", func() {
+	err := dlock.WithNamedMachineLock("docker", func() {
 		id = tag2id(tag)
 
 		if id == "" {
@@ -60,6 +60,10 @@ func dockerUp(tag string, args ...string) string {
 			id = strings.TrimSpace(out)[:12]
 		}
 	})
+	if err != nil {
+		// FIXME(lukeshu): Propagate this error
+		panic(err)
+	}
 
 	return id
 }

@@ -4,22 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/datawire/teleproxy/pkg/dlock"
 	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
-
-func TestMain(m *testing.M) {
-	dtest.Sudo()
-	dlock.WithMachineLock(func() {
-		os.Exit(m.Run())
-	})
-}
 
 func udp_listener(p *supervisor.Process, port int) error {
 	bindaddr := fmt.Sprintf(":%d", port)
@@ -152,74 +146,81 @@ var mappings = []struct {
 }
 
 func TestTranslator(t *testing.T) {
-	sup := supervisor.WithContext(context.Background())
-	sup.Supervise(&supervisor.Worker{
-		Name: "listeners",
-		Work: supervisor.WorkFunc(listeners, []int{1234, 4321}),
-	})
-	sup.Supervise(&supervisor.Worker{
-		Name:     "nat",
-		Requires: []string{"listeners"},
-		Work: func(p *supervisor.Process) error {
-			for _, env := range environments {
-				env.setup()
-				for _, network := range networks {
-					tr := NewTranslator("test-table")
+	dtest.RunAsRoot(t, func(t *testing.T) {
+		assert.NoError(t, dlock.WithMachineLock(func() {
+			sup := supervisor.WithContext(context.Background())
+			sup.Supervise(&supervisor.Worker{
+				Name: "listeners",
+				Work: supervisor.WorkFunc(listeners, []int{1234, 4321}),
+			})
+			sup.Supervise(&supervisor.Worker{
+				Name:     "nat",
+				Requires: []string{"listeners"},
+				Work: func(p *supervisor.Process) error {
+					for _, env := range environments {
+						env.setup()
+						for _, network := range networks {
+							tr := NewTranslator("test-table")
 
-					for _, mapping := range mappings {
-						checkNoForwardTCP(t, fmt.Sprintf("%s.%s", network, mapping.from), mapping.forwarded)
+							for _, mapping := range mappings {
+								checkNoForwardTCP(t, fmt.Sprintf("%s.%s", network, mapping.from), mapping.forwarded)
+							}
+
+							tr.Enable(p)
+
+							for _, mapping := range mappings {
+								from := fmt.Sprintf("%s.%s", network, mapping.from)
+
+								checkNoForwardTCP(t, from, mapping.forwarded)
+								tr.ForwardTCP(p, from, mapping.port, mapping.to)
+								checkForwardTCP(t, from, mapping.forwarded, mapping.to)
+								checkNoForwardTCP(t, from, mapping.notForwarded)
+							}
+
+							for _, mapping := range mappings {
+								from := fmt.Sprintf("%s.%s", network, mapping.from)
+								tr.ClearTCP(p, from, mapping.port)
+								checkNoForwardTCP(t, from, mapping.forwarded)
+							}
+
+							tr.Disable(p)
+						}
+						env.teardown()
 					}
-
-					tr.Enable(p)
-
-					for _, mapping := range mappings {
-						from := fmt.Sprintf("%s.%s", network, mapping.from)
-
-						checkNoForwardTCP(t, from, mapping.forwarded)
-						tr.ForwardTCP(p, from, mapping.port, mapping.to)
-						checkForwardTCP(t, from, mapping.forwarded, mapping.to)
-						checkNoForwardTCP(t, from, mapping.notForwarded)
-					}
-
-					for _, mapping := range mappings {
-						from := fmt.Sprintf("%s.%s", network, mapping.from)
-						tr.ClearTCP(p, from, mapping.port)
-						checkNoForwardTCP(t, from, mapping.forwarded)
-					}
-
-					tr.Disable(p)
-				}
-				env.teardown()
+					sup.Shutdown()
+					return nil
+				},
+			})
+			errs := sup.Run()
+			if len(errs) > 0 {
+				t.Errorf("unexpected errors: %v", errs)
 			}
-			sup.Shutdown()
-			return nil
-		},
+		}))
 	})
-	errs := sup.Run()
-	if len(errs) > 0 {
-		t.Errorf("unexpected errors: %v", errs)
-	}
-
 }
 
 func TestSorted(t *testing.T) {
-	supervisor.MustRun("sorted", func(p *supervisor.Process) error {
-		tr := NewTranslator("test-table")
-		defer tr.Disable(p)
-		tr.ForwardTCP(p, "192.0.2.1", "", "4321")
-		tr.ForwardTCP(p, "192.0.2.3", "", "4323")
-		tr.ForwardTCP(p, "192.0.2.2", "", "4322")
-		tr.ForwardUDP(p, "192.0.2.4", "", "1234")
-		entries := tr.sorted()
-		if !reflect.DeepEqual(entries, []Entry{
-			{Address{"tcp", "192.0.2.1", ""}, "4321"},
-			{Address{"tcp", "192.0.2.2", ""}, "4322"},
-			{Address{"tcp", "192.0.2.3", ""}, "4323"},
-			{Address{"udp", "192.0.2.4", ""}, "1234"},
-		}) {
-			t.Errorf("not sorted: %s", entries)
-		}
+	dtest.RunAsRoot(t, func(t *testing.T) {
+		assert.NoError(t, dlock.WithMachineLock(func() {
+			supervisor.MustRun("sorted", func(p *supervisor.Process) error {
+				tr := NewTranslator("test-table")
+				defer tr.Disable(p)
+				tr.ForwardTCP(p, "192.0.2.1", "", "4321")
+				tr.ForwardTCP(p, "192.0.2.3", "", "4323")
+				tr.ForwardTCP(p, "192.0.2.2", "", "4322")
+				tr.ForwardUDP(p, "192.0.2.4", "", "1234")
+				entries := tr.sorted()
+				if !reflect.DeepEqual(entries, []Entry{
+					{Address{"tcp", "192.0.2.1", ""}, "4321"},
+					{Address{"tcp", "192.0.2.2", ""}, "4322"},
+					{Address{"tcp", "192.0.2.3", ""}, "4323"},
+					{Address{"udp", "192.0.2.4", ""}, "1234"},
+				}) {
+					t.Errorf("not sorted: %s", entries)
+				}
 
-		return nil
+				return nil
+			})
+		}))
 	})
 }

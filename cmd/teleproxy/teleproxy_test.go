@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/yaml"
 
 	"github.com/datawire/teleproxy/pkg/dlock"
@@ -19,18 +20,12 @@ import (
 	"github.com/datawire/teleproxy/pkg/k3sctl"
 )
 
-var noDocker error
+var _, noDocker = exec.LookPath("docker")
 
 func TestMain(m *testing.M) {
 	dtest.Sudo()
 	testprocess.Dispatch()
-	dlock.WithMachineLock(func() {
-		_, noDocker = exec.LookPath("docker")
-		if noDocker == nil {
-			dtest.K8sApply("../../k8s")
-		}
-		os.Exit(m.Run())
-	})
+	os.Exit(m.Run())
 }
 
 func withInterrupt(t *testing.T, cmd *exec.Cmd, body func()) {
@@ -128,9 +123,12 @@ func TestSmoke(t *testing.T) {
 	if noDocker != nil {
 		t.Skip(noDocker)
 	}
-	withInterrupt(t, smoke, func() {
-		poll(t, "http://httptarget", "")
-	})
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("../../k8s")
+		withInterrupt(t, smoke, func() {
+			poll(t, "http://httptarget", "")
+		})
+	}))
 }
 
 var orig = testprocess.MakeSudo(teleproxyCluster)
@@ -140,21 +138,24 @@ func TestAlreadyRunning(t *testing.T) {
 	if noDocker != nil {
 		t.Skip(noDocker)
 	}
-	withInterrupt(t, orig, func() {
-		if poll(t, "http://httptarget", "") {
-			err := dup.Run()
-			t.Logf("ERROR: %v", err)
-			resp, err := get("http://httptarget")
-			if err != nil {
-				t.Errorf("duplicate teleproxy killed the first one: %v", err)
-				return
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("../../k8s")
+		withInterrupt(t, orig, func() {
+			if poll(t, "http://httptarget", "") {
+				err := dup.Run()
+				t.Logf("ERROR: %v", err)
+				resp, err := get("http://httptarget")
+				if err != nil {
+					t.Errorf("duplicate teleproxy killed the first one: %v", err)
+					return
+				}
+				defer resp.Body.Close()
+				if resp.StatusCode != 200 {
+					t.Errorf("duplicate teleproxy killed the first one: %v", resp.StatusCode)
+				}
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode != 200 {
-				t.Errorf("duplicate teleproxy killed the first one: %v", resp.StatusCode)
-			}
-		}
-	})
+		})
+	}))
 }
 
 const HupConfig = "/tmp/teleproxy_test_hup_cluster.yaml"
@@ -227,23 +228,26 @@ func TestHUPGood2Alt(t *testing.T) {
 	if noDocker != nil {
 		t.Skip(noDocker)
 	}
-	gotHere := false
-	writeGoodFile(HupConfig)
-	withInterrupt(t, hup, func() {
-		if poll(t, "http://httptarget", "HTTPTEST") {
-			writeAltFile(HupConfig)
-			err := hup.Process.Signal(syscall.SIGHUP)
-			if err != nil {
-				t.Errorf("error sending signal: %v", err)
-				return
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("../../k8s")
+		gotHere := false
+		writeGoodFile(HupConfig)
+		withInterrupt(t, hup, func() {
+			if poll(t, "http://httptarget", "HTTPTEST") {
+				writeAltFile(HupConfig)
+				err := hup.Process.Signal(syscall.SIGHUP)
+				if err != nil {
+					t.Errorf("error sending signal: %v", err)
+					return
+				}
+				if poll(t, "http://httptarget", "ALT") {
+					gotHere = true
+					return
+				}
 			}
-			if poll(t, "http://httptarget", "ALT") {
-				gotHere = true
-				return
-			}
+		})
+		if !gotHere {
+			t.Errorf("didn't get there")
 		}
-	})
-	if !gotHere {
-		t.Errorf("didn't get there")
-	}
+	}))
 }

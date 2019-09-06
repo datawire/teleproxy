@@ -1,7 +1,6 @@
 package k3sctl
 
 import (
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,22 +8,18 @@ import (
 	"github.com/datawire/teleproxy/pkg/dlock"
 )
 
-func TestMain(m *testing.M) {
+func TestContainer(t *testing.T) {
 	// we get the lock to make sure we are the only thing running
 	// because the nat tests interfere with docker functionality
-	dlock.WithMachineLock(func() {
-		os.Exit(m.Run())
-	})
-}
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		id := dockerUp("dtest-test-tag", "nginx")
 
-func TestContainer(t *testing.T) {
-	id := dockerUp("dtest-test-tag", "nginx")
+		running := dockerPs()
+		assert.Contains(t, running, id)
 
-	running := dockerPs()
-	assert.Contains(t, running, id)
+		dockerKill(id)
 
-	dockerKill(id)
-
-	running = dockerPs()
-	assert.NotContains(t, running, id)
+		running = dockerPs()
+		assert.NotContains(t, running, id)
+	}))
 }

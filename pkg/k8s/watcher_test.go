@@ -4,8 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/datawire/teleproxy/pkg/dlock"
+	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/k3sctl"
 	"github.com/datawire/teleproxy/pkg/k8s"
 )
@@ -42,79 +45,104 @@ func info() *k8s.KubeInfo {
 }
 
 func TestUpdateStatus(t *testing.T) {
-	w := k8s.MustNewWatcher(info())
+	// we get the lock to make sure we are the only thing running
+	// because the nat tests interfere with docker functionality
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("00-custom-crd.yaml", "custom.yaml")
 
-	svc := fetch(w, "services", "kubernetes.default")
-	svc.Status()["loadBalancer"].(map[string]interface{})["ingress"] = []map[string]interface{}{{"hostname": "foo", "ip": "1.2.3.4"}}
-	result, err := w.UpdateStatus(svc)
-	if err != nil {
-		t.Error(err)
-		return
-	} else {
+		w := k8s.MustNewWatcher(info())
+
+		svc := fetch(w, "services", "kubernetes.default")
+		svc.Status()["loadBalancer"].(map[string]interface{})["ingress"] = []map[string]interface{}{
+			{"hostname": "foo", "ip": "1.2.3.4"},
+		}
+		result, err := w.UpdateStatus(svc)
+		if err != nil {
+			t.Error(err)
+			return
+		}
 		t.Logf("updated %s status, result: %v\n", svc.QName(), result.ResourceVersion())
-	}
 
-	svc = fetch(k8s.MustNewWatcher(info()), "services", "kubernetes.default")
-	ingresses := svc.Status()["loadBalancer"].(map[string]interface{})["ingress"].([]interface{})
-	ingress := ingresses[0].(map[string]interface{})
-	if ingress["hostname"] != "foo" {
-		t.Error("expected foo")
-	}
+		svc = fetch(k8s.MustNewWatcher(info()), "services", "kubernetes.default")
+		ingresses := svc.Status()["loadBalancer"].(map[string]interface{})["ingress"].([]interface{})
+		ingress := ingresses[0].(map[string]interface{})
+		if ingress["hostname"] != "foo" {
+			t.Error("expected foo")
+		}
 
-	if ingress["ip"] != "1.2.3.4" {
-		t.Error("expected 1.2.3.4")
-	}
+		if ingress["ip"] != "1.2.3.4" {
+			t.Error("expected 1.2.3.4")
+		}
+	}))
 }
 
 func TestWatchCustom(t *testing.T) {
-	w := k8s.MustNewWatcher(info())
+	// we get the lock to make sure we are the only thing running
+	// because the nat tests interfere with docker functionality
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("00-custom-crd.yaml", "custom.yaml")
 
-	// XXX: we can only watch custom resources... k8s doesn't
-	// support status for CRDs until 1.12
-	xmas := fetch(w, "customs", "xmas.default")
-	if xmas == nil {
-		t.Error("couldn't find xmas")
-	} else {
-		spec := xmas.Spec()
-		if spec["deck"] != "the halls" {
-			t.Errorf("expected the halls, got %v", spec["deck"])
+		w := k8s.MustNewWatcher(info())
+
+		// XXX: we can only watch custom resources... k8s doesn't
+		// support status for CRDs until 1.12
+		xmas := fetch(w, "customs", "xmas.default")
+		if xmas == nil {
+			t.Error("couldn't find xmas")
+		} else {
+			spec := xmas.Spec()
+			if spec["deck"] != "the halls" {
+				t.Errorf("expected the halls, got %v", spec["deck"])
+			}
 		}
-	}
+	}))
 }
 
 func TestWatchCustomCollision(t *testing.T) {
-	w := k8s.MustNewWatcher(info())
+	// we get the lock to make sure we are the only thing running
+	// because the nat tests interfere with docker functionality
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("00-custom-crd.yaml", "custom.yaml")
 
-	easter := fetch(w, "csrv", "easter.default")
-	if easter == nil {
-		t.Error("couln't find easter")
-	} else {
-		spec := easter.Spec()
-		deck := spec["deck"]
-		if deck != "the lawn" {
-			t.Errorf("expected the lawn, got %v", deck)
+		w := k8s.MustNewWatcher(info())
+
+		easter := fetch(w, "csrv", "easter.default")
+		if easter == nil {
+			t.Error("couln't find easter")
+		} else {
+			spec := easter.Spec()
+			deck := spec["deck"]
+			if deck != "the lawn" {
+				t.Errorf("expected the lawn, got %v", deck)
+			}
 		}
-	}
+	}))
 }
 
 func TestWatchQuery(t *testing.T) {
-	w := k8s.MustNewWatcher(info())
+	// we get the lock to make sure we are the only thing running
+	// because the nat tests interfere with docker functionality
+	assert.NoError(t, dlock.WithMachineLock(func() {
+		dtest.K8sApply("00-custom-crd.yaml", "custom.yaml")
 
-	services := []string{}
-	err := w.WatchQuery(k8s.Query{
-		Kind:          "services",
-		FieldSelector: "metadata.name=kubernetes",
-	}, func(w *k8s.Watcher) {
-		for _, r := range w.List("services") {
-			services = append(services, r.QName())
+		w := k8s.MustNewWatcher(info())
+
+		services := []string{}
+		err := w.WatchQuery(k8s.Query{
+			Kind:          "services",
+			FieldSelector: "metadata.name=kubernetes",
+		}, func(w *k8s.Watcher) {
+			for _, r := range w.List("services") {
+				services = append(services, r.QName())
+			}
+		})
+		if err != nil {
+			panic(err)
 		}
-	})
-	if err != nil {
-		panic(err)
-	}
-	time.AfterFunc(1*time.Second, func() {
-		w.Stop()
-	})
-	w.Wait()
-	require.Equal(t, services, []string{"kubernetes.default"})
+		time.AfterFunc(1*time.Second, func() {
+			w.Stop()
+		})
+		w.Wait()
+		require.Equal(t, services, []string{"kubernetes.default"})
+	}))
 }

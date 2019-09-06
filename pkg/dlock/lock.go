@@ -5,26 +5,23 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 const pattern = "/tmp/datawire-machine-scoped-%s.lock"
 
-func exit(filename string, err error) {
-	fmt.Fprintf(os.Stderr, "error trying to acquire lock on %s: %v\n", filename, err)
-	os.Exit(1)
-}
-
 // WithMachineLock executes the supplied body with a guarantee that it
 // is the only code running (via WithMachineLock) on the machine.
-func WithMachineLock(body func()) {
-	WithNamedMachineLock("default", body)
+func WithMachineLock(body func()) error {
+	return WithNamedMachineLock("default", body)
 }
 
 // WithNamedMachineLock executes the supplied body with a guarantee
 // that it is the only code running (via WithMachineLock) on the
 // machine. The name provides scope so this can be used in multiple
 // independent ways without conflicts.
-func WithNamedMachineLock(name string, body func()) {
+func WithNamedMachineLock(name string, body func()) error {
 	lockAcquireStart := time.Now()
 	filename := fmt.Sprintf(pattern, name)
 	var file *os.File
@@ -52,13 +49,13 @@ func WithNamedMachineLock(name string, body func()) {
 	}()
 
 	if err != nil {
-		exit(filename, err)
+		return errors.Wrapf(err, "error trying to acquire lock on %q", filename)
 	}
 
 	err = syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
 	if err != nil {
 		err = &os.PathError{Op: "flock", Path: file.Name(), Err: err}
-		exit(filename, err)
+		return errors.Wrapf(err, "error trying to acquire lock on %q", filename)
 	}
 	defer func() {
 		file.Close()
@@ -66,4 +63,5 @@ func WithNamedMachineLock(name string, body func()) {
 
 	fmt.Printf("Acquiring machine lock %q took %.2f seconds\n", name, time.Since(lockAcquireStart).Seconds())
 	body()
+	return nil
 }
