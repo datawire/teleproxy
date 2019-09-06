@@ -1,4 +1,4 @@
-package dtest
+package dlock
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package dtest
+package k3sctl
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/datawire/teleproxy/pkg/dlock"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
@@ -49,7 +50,7 @@ func tag2id(tag string) string {
 func dockerUp(tag string, args ...string) string {
 	var id string
 
-	WithNamedMachineLock("docker", func() {
+	dlock.WithNamedMachineLock("docker", func() {
 		id = tag2id(tag)
 
 		if id == "" {

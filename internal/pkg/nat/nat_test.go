@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/datawire/teleproxy/pkg/dlock"
 	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/supervisor"
 )
 
 func TestMain(m *testing.M) {
 	dtest.Sudo()
-	dtest.WithMachineLock(func() {
+	dlock.WithMachineLock(func() {
 		os.Exit(m.Run())
 	})
 }

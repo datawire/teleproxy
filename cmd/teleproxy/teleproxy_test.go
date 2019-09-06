@@ -13,8 +13,10 @@ import (
 
 	"sigs.k8s.io/yaml"
 
+	"github.com/datawire/teleproxy/pkg/dlock"
 	"github.com/datawire/teleproxy/pkg/dtest"
 	"github.com/datawire/teleproxy/pkg/dtest/testprocess"
+	"github.com/datawire/teleproxy/pkg/k3sctl"
 )
 
 var noDocker error
@@ -22,7 +24,7 @@ var noDocker error
 func TestMain(m *testing.M) {
 	dtest.Sudo()
 	testprocess.Dispatch()
-	dtest.WithMachineLock(func() {
+	dlock.WithMachineLock(func() {
 		_, noDocker = exec.LookPath("docker")
 		if noDocker == nil {
 			dtest.K8sApply("../../k8s")
@@ -116,7 +118,7 @@ func poll(t *testing.T, url string, expected string) bool {
 }
 
 func teleproxyCluster() {
-	os.Args = []string{"teleproxy", fmt.Sprintf("--kubeconfig=%s", dtest.Kubeconfig())}
+	os.Args = []string{"teleproxy", fmt.Sprintf("--kubeconfig=%s", k3sctl.Kubeconfig())}
 	main()
 }
 
@@ -163,7 +165,7 @@ var hup = testprocess.MakeSudo(func() {
 })
 
 func writeGoodFile(dest string) {
-	good, err := ioutil.ReadFile(dtest.Kubeconfig())
+	good, err := ioutil.ReadFile(k3sctl.Kubeconfig())
 	if err != nil {
 		panic(err)
 	}
@@ -183,7 +185,7 @@ func writeBadFile(dest string) {
 }
 
 func writeAltFile(dest string) {
-	good, err := ioutil.ReadFile(dtest.Kubeconfig())
+	good, err := ioutil.ReadFile(k3sctl.Kubeconfig())
 	if err != nil {
 		panic(err)
 	}

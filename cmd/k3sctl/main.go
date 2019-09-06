@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/datawire/teleproxy/pkg/dtest"
+	"github.com/datawire/teleproxy/pkg/k3sctl"
 )
 
 // Version holds the version of the code. This is intended to be overridden at build time.
@@ -45,8 +45,8 @@ func main() {
 	k3s.AddCommand(up)
 
 	up.RunE = func(cmd *cobra.Command, args []string) error {
-		regid := dtest.RegistryUp()
-		k3sid := dtest.K3sUp()
+		regid := k3sctl.RegistryUp()
+		k3sid := k3sctl.K3sUp()
 		fmt.Printf("DOCKER_CONTAINER=%q\n", regid)
 		fmt.Printf("K3S_CONTAINER=%q\n", k3sid)
 		return nil
@@ -60,8 +60,8 @@ func main() {
 	k3s.AddCommand(down)
 
 	down.RunE = func(cmd *cobra.Command, args []string) error {
-		k3sid := dtest.K3sDown()
-		regid := dtest.RegistryDown()
+		k3sid := k3sctl.K3sDown()
+		regid := k3sctl.RegistryDown()
 		fmt.Printf("Shutdown k3s container: %s\n", k3sid)
 		fmt.Printf("Shutdown registry container: %s\n", regid)
 		return nil
@@ -75,7 +75,7 @@ func main() {
 	k3s.AddCommand(registry)
 
 	registry.RunE = func(cmd *cobra.Command, args []string) error {
-		fmt.Println(dtest.DockerRegistry())
+		fmt.Println(k3sctl.DockerRegistry())
 		return nil
 	}
 
@@ -89,7 +89,7 @@ func main() {
 	k3s.AddCommand(config)
 
 	config.RunE = func(cmd *cobra.Command, args []string) error {
-		kubeconfig := dtest.GetKubeconfig()
+		kubeconfig := k3sctl.GetKubeconfig()
 		if kubeconfig == "" {
 			return errors.New("no k3s cluster is running")
 		}

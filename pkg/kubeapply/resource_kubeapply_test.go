@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/datawire/teleproxy/pkg/dtest"
+	"github.com/datawire/teleproxy/pkg/k3sctl"
 	"github.com/datawire/teleproxy/pkg/kubeapply"
 )
 
@@ -15,7 +15,7 @@ func TestDocker(t *testing.T) {
 	}
 
 	if os.Getenv("DOCKER_REGISTRY") == "" {
-		os.Setenv("DOCKER_REGISTRY", dtest.DockerRegistry())
+		os.Setenv("DOCKER_REGISTRY", k3sctl.DockerRegistry())
 	}
 
 	_, err := kubeapply.ExpandResource("docker.yaml")

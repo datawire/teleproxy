@@ -13,6 +13,7 @@ refer to.
  * <b>[k3sctl]</b> Bug fix: More robust readiness check.
  * <b>[teleproxy]</b> Once again works properly for services with multiple ports.
  * <b>[lib/dlog]</b> Added.
+ * <b>[lib/dtest]</b> BREAKING CHANGE: The k3s and locking functionality have moved to separate <b>[lib/k3sctl]</b> and <b>[lib/dlock]</b> packages.
  * <b>[lib/dtest/testprocess]</b> Enhancement: Don't require the use of `sudo`.
  * <b>[lib/exec]</b> Added.
  * <b>[lib/k8s]</b> BREAKING CHANGE: Many things moved to <b>[lib/kubeapply]</b>.
