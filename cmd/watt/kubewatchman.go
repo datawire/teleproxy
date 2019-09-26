@@ -22,6 +22,8 @@ func (m *KubernetesWatchMaker) MakeKubernetesWatch(spec KubernetesWatchSpec) (*s
 	var worker *supervisor.Worker
 	var err error
 
+	m.notify = make(chan<- k8sEvent, 1)
+
 	worker = &supervisor.Worker{
 		Name: fmt.Sprintf("kubernetes:%s", spec.WatchId()),
 		Work: func(p *supervisor.Process) error {
